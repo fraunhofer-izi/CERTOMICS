@@ -1,0 +1,96 @@
+Bootstrap: docker
+From: ubuntu:22.04
+
+%labels
+    Author Christina Kuhn
+    Version v0.0.2
+
+%post
+    export DEBIAN_FRONTEND=noninteractive
+    
+    # Update the package list and install required dependencies
+	apt-get update && apt-get install -y \
+		software-properties-common \
+		apt-transport-https \
+		ca-certificates \
+		curl \
+		wget \
+		gdebi-core \
+		python3 \
+		python3-pip \
+		libcurl4-openssl-dev \
+		libssl-dev \
+		libxml2-dev \
+		libgit2-dev \
+		locales \
+		pandoc \
+		pandoc-citeproc \
+        pkg-config \
+        libcairo2-dev \
+        libgsl-dev \
+        libfontconfig1-dev \
+        libfreetype6-dev \
+        libpng-dev \
+        libtiff5-dev \
+        libjpeg-dev \
+        libharfbuzz-dev \
+        libfribidi-dev
+
+    # Set up locales
+    locale-gen en_US.UTF-8
+    update-locale LANG=en_US.UTF-8
+
+    # Install R (version 4.4.1) from CRAN
+    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 'E298A3A825C0D65DFD57CBB651716619E084DAB9'
+    add-apt-repository 'deb https://cloud.r-project.org/bin/linux/ubuntu jammy-cran40/'
+    apt-get update && apt-get install -y r-base r-base-dev
+	
+	# Install Bioconductor packages with specific versions
+    R -e "if (!requireNamespace('BiocManager', quietly = TRUE)) install.packages('BiocManager')"
+    R -e "BiocManager::install(c('BiocParallel', 'SingleCellExperiment', 'scDblFinder', 'scds', 'scRepertoire', 'UCell', 'clustifyr'))"
+
+    # Install R packages using install.r
+    R -e "install.packages(c('remotes', 'shiny', 'jsonlite', 'ggplot2', 'htmltools', 'renv', 'knitr', 'rmarkdown', 'quarto'), repos = 'https://cloud.r-project.org')"
+
+    # Install specific versions of CRAN packages
+    R -e "remotes::install_version('reticulate', version = '1.39.0', repos = 'https://cloud.r-project.org')"
+    R -e "remotes::install_version('yaml', version = '2.3.10', repos = 'https://cloud.r-project.org')"
+    R -e "remotes::install_version('dplyr', version = '1.1.4', repos = 'https://cloud.r-project.org')"
+    R -e "remotes::install_version('tidyr', version = '1.3.1', repos = 'https://cloud.r-project.org')"
+    R -e "remotes::install_version('stringr', version = '1.5.1', repos = 'https://cloud.r-project.org')"
+    R -e "remotes::install_version('data.table', version = '1.16.2', repos = 'https://cloud.r-project.org')"
+    R -e "remotes::install_version('ggplot2', version = '3.5.1', repos = 'https://cloud.r-project.org')"
+    R -e "remotes::install_version('ggthemes', version = '5.1.0', repos = 'https://cloud.r-project.org')"
+    R -e "remotes::install_version('crosstalk', version = '1.2.1', repos = 'https://cloud.r-project.org')"
+    R -e "remotes::install_version('plotly', version = '4.10.4', repos = 'https://cloud.r-project.org')"
+    R -e "remotes::install_version('htmlwidgets', version = '1.6.4', repos = 'https://cloud.r-project.org')"
+    R -e "remotes::install_version('htmltools', version = '0.5.8.1', repos = 'https://cloud.r-project.org')"
+    R -e "remotes::install_version('Seurat', version = '5.1.0', repos = 'https://cloud.r-project.org')"
+    R -e "remotes::install_version('patchwork', version = '1.3.0', repos = 'https://cloud.r-project.org')"
+    R -e "remotes::install_version('SeuratObject', version = '5.0.2', repos = 'https://cloud.r-project.org')"
+    R -e "remotes::install_version('doParallel', version = '1.0.17', repos = 'https://cloud.r-project.org')"
+    R -e "remotes::install_version('Matrix', version = '1.6-5', repos = 'https://cloud.r-project.org')"
+    R -e "remotes::install_version('scGate', version = '1.6.2', repos = 'https://cloud.r-project.org')"
+	
+    # Install GitHub packages with specific versions using remotes
+    R -e "remotes::install_github('carmonalab/STACAS')"
+    R -e "remotes::install_github('carmonalab/ProjecTILs')"
+
+	# Install Quarto
+    wget https://quarto.org/download/latest/quarto-linux-amd64.deb
+    gdebi --non-interactive quarto-linux-amd64.deb
+    rm quarto-linux-amd64.deb
+
+    # Verify Quarto installation
+    quarto check install
+	
+	pip3 install matplotlib==3.7.5 numpy==1.24.4 jinja2==3.1.4 pandas==2.0.3 pyfaidx==0.8.1.1 pysam==0.22.1 gffutils==0.13 pygenomeviz==0.4.4
+	pip3 install jupyter 
+	
+%environment
+    export LC_ALL=en_US.UTF-8
+    export LANG=en_US.UTF-8
+    export LANGUAGE=en_US.UTF-8
+
+%runscript
+    echo "Singularity container with R and Quarto is ready."

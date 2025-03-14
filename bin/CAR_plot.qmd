@@ -1,0 +1,696 @@
+---
+title: "Quality Control"
+author: "Fraunhofer IZI"
+subtitle: "LivingDrugOmics v1.0"
+date: today
+format:
+  html:
+    code-fold: true
+    theme: lux
+    fig-width: 8
+    fig-height: 6
+execute:
+  echo: true
+  warning: true
+  error: true
+  debug: true
+params:
+  results_metrics_reads_CAR: "" #"results_metrics_reads_CAR.csv" 
+  results_coverage_against_CAR: "" #"results_coverage_against_CAR.csv"
+  results_coverage_against_CAR_unique: "" #"results_coverage_against_CAR_unique.csv"
+  gtf: "" #"Anno_Axicel.gtf"
+  seurat_object: "" #"merged_seurat.rds"
+  libraries: "" # example "1110" #flags according to use GEX, VDJT, VDJB, AntibodyCapture
+---
+
+```{r}
+#| label: load-packages
+#| include: false
+#| warning: false
+#| eval: true
+
+#set cran packages
+.cran_packages = c(
+  "yaml", "dplyr", "tidyr", "stringr", "data.table", "ggplot2", "ggthemes", "crosstalk", "plotly", "htmlwidgets",
+  "htmltools", "reticulate", "Seurat", "patchwork", "knitr"
+)
+#set bioconductor packages
+.bioc_packages = c()
+list.of.packages = c(.cran_packages, .bioc_packages)
+
+## Loading library
+for (pack in list.of.packages) {
+  suppressMessages(library(
+    pack,
+    quietly = TRUE,
+    verbose = FALSE,
+    character.only = TRUE
+  ))
+}
+library("reticulate")
+source("helper_functions.R")
+use_python("/usr/bin/python3", required = TRUE) 
+```
+
+:::{.panel-tabset .nav-pills}
+# CAR-level metrics
+
+::: {.callout-note collapse="true"}
+## All plots are generated using filtered seurat object. Click to expand filtering criteria and cell numbers
+
+### Filtering criteria applied:
+- **Feature Count**:
+  - Lower: `nFeature_low_cutoff = 250`
+  - Upper: `nFeature_high_cutoff = 8000`
+- **UMI Count**:
+  - Lower: `nCount_low_cutoff = 1000`
+  - Upper: `nCount_high_cutoff = 100000`
+- **Mitochondrial Content**: `mt_cutoff = 15`
+- **Complexity Score**: `complx_cutoff = 0.8`
+- **Doublet Removal**: `scDblFinder_class == "doublet"`
+
+```{r}
+#| label: set-flags-r
+#| echo: false
+#| warning: false
+#| message: false
+#| eval: true
+
+# Get paramters
+seurat_object <- params$seurat_object
+libraries <- params$libraries
+flags <- parse_binary_string(libraries)
+
+# Load Seurat object
+seu.obj <- readRDS(seurat_object)
+# Count cells per sample before filtering
+cells_per_sample_before <- as.data.frame(table(seu.obj$orig.ident))
+colnames(cells_per_sample_before) <- c("Sample", "Cells_Before_Filtering")
+
+# Subset the Seurat object safely
+seu.obj.filtered <- tryCatch({
+  subset(seu.obj, subset = KEEP_CELL == TRUE)
+}, error = function(e) {
+  message("No cells passed the filtering condition. Returning NULL.")
+  return(NULL)  # Ensure NULL is returned properly
+})
+
+# Prepare data table for cell counts summary
+if (!is.null(seu.obj.filtered)) {
+  # If filtering was successful, retrieve metadata and count cells per sample
+  meta_data <- seu.obj.filtered@meta.data
+  cells_per_sample_after <- as.data.frame(table(seu.obj.filtered$orig.ident))
+} else {
+  # If filtering resulted in NULL, create an empty data frame
+  meta_data <- NULL
+  cells_per_sample_after <- data.frame(Sample = unique(cells_per_sample_before$Sample), Cells_After_Filtering = 0)
+}
+
+# Ensure consistent merging, filling NA values with 0
+colnames(cells_per_sample_after) <- c("Sample", "Cells_After_Filtering")
+cell_counts_summary <- merge(cells_per_sample_before, cells_per_sample_after, by = "Sample", all = TRUE)
+cell_counts_summary[is.na(cell_counts_summary)] <- 0
+
+```
+
+```{r}
+#| label: cell-counts-table
+#| echo: false
+#| message: false
+#| warning: false
+#| results: asis
+
+library(knitr)
+kable(cell_counts_summary, caption = "Number of Cells Per Sample Before and After Filtering")
+```
+
+:::
+
+```{r}
+#| label: QC-Alert
+#| echo: false
+#| warning: false
+#| results: asis
+#| eval: !expr (is.null(meta_data))
+
+if (is.null(meta_data)) {
+  cat("
+::: {.alert .alert-warning}
+⚠️ **Warning:** No cells passed the filtering condition. See filtering criteria above.
+:::
+")
+}
+```
+
+
+```{r}
+#| label: QC-Alert-CAR
+#| echo: false
+#| warning: false
+#| results: asis
+#| eval: !expr (params$gtf == "none")
+
+if (is.null(meta_data)) {
+  cat("
+::: {.alert .alert-warning}
+⚠️ **Warning:** No CAR construct was given. CAR-specific metrices not available.
+:::
+")
+}
+```
+
+
+## Read-level
+
+```{python}
+#| label: set-flags-python
+#| echo: false
+#| eval: true
+#| warning: false
+
+def parse_binary_string(binary_string):
+    # Ensure the binary string has at least 7 characters by padding with '0' to the right
+    binary_string = str(binary_string).ljust(7, '0')
+
+    # Return a dictionary of booleans corresponding to each position in the binary string
+    return {
+        'GEX': binary_string[0] == '1',
+        'VDJT': binary_string[1] == '1',
+        'VDJB': binary_string[2] == '1',
+        'AntibodyCapture': binary_string[3] == '1'
+    }
+
+flags = parse_binary_string(r.params['libraries'])
+```
+
+```{python}
+#| label: coverage-plot
+#| fig-cap: "Read coverage across the CAR construct is given. The x-axis presents nucleotide position within the CAR construct, while the y-axis shows the number of reads mapping to each nucleotide position. Coverage is depicted for two categories: uniquely mapped reads (in blue) and all mapped reads (in purple), which include both uniquely and multimapped reads, as determined by the STAR aligner."
+#| echo: false
+#| eval: !expr (params["gtf"] != "none")
+#| warning: false
+
+import CAR_quality_plot
+if flags["GEX"]:
+  read_metrics, cov_all, cov_unique = CAR_quality_plot.read_data(\
+          r.params['results_metrics_reads_CAR'], r.params['results_coverage_against_CAR'], r.params['results_coverage_against_CAR_unique'])
+
+  CAR_quality_plot.plot_coverage(cov_all, cov_unique, r.params['gtf'])
+```
+
+<br>
+
+```{python}
+#| label: read-metrics
+#| fig-cap: "Absolute Number of reads mapping against CAR construct."
+#| echo: false
+#| eval: !expr (params["gtf"] != "none")
+#| warning: false
+
+if flags["GEX"]:
+  CAR_quality_plot.plot_read_metrices(read_metrics, r.params['gtf'])
+```
+
+## Count-level
+
+```{r}
+#| label: count-level-plots
+#| fig-cap: "Percentage of CAR-positive cells (count>0) compared to all T cells (CD4, CD8, gd) (based on scGate annotation). Absolute counts are displayed on top of the bars."
+#| echo: false
+#| warning: false
+#| eval: !expr (params$gtf != "none")
+#| fig-height: 4
+
+car_construct_path = params$gtf
+lines <- readLines(car_construct_path)
+
+# Extract the first line
+first_line <- lines[1]
+# Extract the first word of the first line
+car_construct <- strsplit(first_line, "\\s+")[[1]][1]
+
+if (flags$GEX && params$gtf != "none" && !is.null(meta_data)){
+  ############ CAR-plots
+  t_cell_data <- meta_data %>%
+    filter(is.pure_CD8T == "Pure" | is.pure_CD4T == "Pure" | is.pure_gdT == "Pure")
+
+  # Summarize T_CAR = TRUE counts as a percentage of all T_CAR
+  result <- t_cell_data %>%
+    group_by(orig.ident) %>%
+    summarize(
+      T_CAR_TRUE_count = sum(T_CAR == TRUE),
+      T_cell_total_count = n(),  # Total number of T cells in the group
+      percentage_T_CAR_TRUE = (T_CAR_TRUE_count / T_cell_total_count) * 100
+    )
+
+  plot_car_proportion <- ggplot(result, aes(x = orig.ident, y = percentage_T_CAR_TRUE)) +
+    geom_bar(stat = "identity", fill = "#0b81a2") +
+    geom_text(aes(label = T_CAR_TRUE_count),
+              vjust = -0.5,  # Adjusts text position above bars
+              size = 3,  # Adjust text size
+              fontface = "bold") +  # Make text bold
+    labs(
+        x = "Sample",
+        y = "CAR+ Cells (% of all T cells)") +
+    ylim(0, max(100) * 1.1) +  # Increase ylim slightly to make space for labels
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+  print(plot_car_proportion)
+}
+```
+
+<br>
+
+```{r}
+#| label: count-level-plots2
+#| fig-cap: "Percentage of CAR-positive cells (count>0) compared to all CD4+ (A) and CD8+ (B) T cells (scGate annotation PBMC model). Absolute counts are displayed on top of the bars."
+#| echo: false
+#| warning: false
+#| eval: !expr (params$gtf != "none")
+#| fig-height: 4
+
+if (flags$GEX && params$gtf != "none" && !is.null(meta_data)){
+  # Filter and summarize data for pure CD8+ T cells
+  summary_cd8_pure <- meta_data %>%
+    filter(is.pure_CD8T == "Pure") %>%  # Only pure CD8+ T cells
+    group_by(orig.ident) %>%
+    summarise(
+      total_cd8_pure_cells = n(),  # Total pure CD8+ cells
+      CAR_cells = sum(CAR_BY_EXPRS == TRUE),  # Number of CAR+ cells
+      proportion_CAR = CAR_cells / total_cd8_pure_cells  # Proportion of CAR+ cells
+    )
+
+  # Filter and summarize data for pure CD4+ T cells
+  summary_cd4_pure <- meta_data %>%
+    filter(is.pure_CD4T == "Pure") %>%  # Only pure CD4+ T cells
+    group_by(orig.ident) %>%
+    summarise(
+      total_cd4_pure_cells = n(),  # Total pure CD4+ cells
+      CAR_cells = sum(CAR_BY_EXPRS == TRUE),  # Number of CAR+ cells
+      proportion_CAR = CAR_cells / total_cd4_pure_cells  # Proportion of CAR+ cells
+    )
+
+  # Plot for pure CD8+ T cells
+  plot_cd8_pure <- ggplot(summary_cd8_pure, aes(x = orig.ident, y = proportion_CAR)) +
+    geom_bar(stat = "identity", width = 0.6, fill = "#0b81a2") +
+    scale_y_continuous(labels = scales::percent_format()) +
+    geom_text(aes(label = CAR_cells),
+              vjust = -0.5,  # Adjusts text position above bars
+              size = 3,  # Adjust text size
+              fontface = "bold") +  # Make text bold
+    ylim(0, max(100) * 1.1) +  # Increase ylim slightly to make space for labels
+    labs(
+      title = "CD8 CAR+ T cells",
+      x = "Sample",
+      y = "CAR+ cells (% of CD8 T cells)"
+    ) +
+    theme_minimal() +
+    theme(
+      legend.position = "none",
+      axis.text.x = element_text(angle = 45, hjust = 1)  # Rotate x-axis labels by 45 degrees
+    )
+
+  # Plot for pure CD4+ T cells
+  plot_cd4_pure <- ggplot(summary_cd4_pure, aes(x = orig.ident, y = proportion_CAR)) +
+    geom_bar(stat = "identity", width = 0.6, fill = "#0b81a2") +
+    scale_y_continuous(labels = scales::percent_format()) +
+    geom_text(aes(label = CAR_cells),
+              vjust = -0.5,  # Adjusts text position above bars
+              size = 3,  # Adjust text size
+              fontface = "bold") +  # Make text bold
+    ylim(0, max(100) * 1.1) +  # Increase ylim slightly to make space for labels
+    labs(
+      title = "CD4 CAR+ T cells",
+      x = "Sample",
+      y = "CAR+ cells (% of CD4 T cells)"
+    ) +
+    theme_minimal() +
+    theme(
+      legend.position = "none",
+      axis.text.x = element_text(angle = 45, hjust = 1)  # Rotate x-axis labels by 45 degrees
+    )
+
+  # Combine the two plots
+  combined_plot <- plot_cd8_pure + plot_cd4_pure + plot_layout(ncol = 2) + plot_annotation(tag_levels = 'A')
+  # Display the combined plot
+  print(combined_plot)
+}
+```
+
+# GEX-specific metrices
+
+```{r}
+#| label: QC-Alert-1
+#| echo: false
+#| warning: false
+#| results: asis
+#| eval: !expr (is.null(meta_data))
+
+if (is.null(meta_data)) {
+  cat("
+::: {.alert .alert-warning}
+⚠️ **Warning:** No cells passed the filtering condition. See filtering criteria.
+:::
+")
+}
+```
+
+## Cell type proportions
+
+`r if (!flags$GEX) 'No GEX libraries were processed.'`
+
+```{r}
+#| label: GEX-metric-cell-type-composition-absolute
+#| fig-cap: "Absolute number of cell types per samples, based on annotation with scGate (PBMC model)."
+#| echo: false
+#| eval: !expr (!is.null(meta_data))
+#| warning: false
+#| fig-height: 4
+
+custom_colors <- c(
+  "Bcell"                           = "#F8766D",  # Red-Orange
+  "CD8T"                            = "#0A5B7C",  # Dark Blue
+  "CD4T"                            = "#66A6D9",  # Light Blue
+  "Erythrocyte"                     = "#990000",  # Dark Red (reflects high hemoglobin content)
+  "Neutrophils"                     = "#6A3D9A",  # Purple
+  "NK"                              = "#B3B3B3",  # Light Grey
+  "HSPC"                            = "#E78AC3",  # Light Pink (early progenitors)
+  "Mast"                            = "#FFD700",  # Gold (linked to histamine & granule release)
+  "Monocyte"                        = "#A6D854",  # Bright Lime Green
+  "panDC"                           = "#33A02C",  # Strong Green (DCs link innate & adaptive immunity)
+  "PlasmaCell"                      = "#8B0000",  # Dark Maroon (high antibody secretion)
+  "Platelet"                        = "#E31A1C",  # Strong Red
+  "gdT"                             = "#FF7F00",  # Orange (bridge between innate & adaptive)
+  "NA"                              = "#BBBBBB",  # Grey (uncertain classification)
+  "Multi"                           = "black"     # Black (indicates ambiguous classification)
+)
+
+
+if (flags$GEX){
+  # Get number of each cloneSize
+  result <- meta_data %>%
+    group_by(orig.ident, scGate_multi) %>%
+    summarize(cell_count = n(), .groups = "drop")  # Count absolute numbers
+
+  # Create the stacked bar plot with absolute counts
+  stacked_bar_absolute_plot <- ggplot(result, aes(x = orig.ident, y = cell_count, fill = scGate_multi)) +
+    geom_bar(stat = "identity") +
+    scale_fill_manual(values = custom_colors) +
+    labs(
+        x = "Sample",
+        y = "Number of Cells",
+        fill = "Cell Types"  # Change legend title
+    ) +
+    theme_minimal() +
+    theme(
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.text = element_text(size = 8),         # Reduce legend text size
+        legend.title = element_text(size = 9),        # Reduce legend title size
+        legend.key.size = unit(0.4, "cm")             # Reduce legend key size
+    )
+
+  print(stacked_bar_absolute_plot)
+}
+```
+
+<br>
+
+```{r}
+#| label: GEX-metric-cell-type-composition-relative
+#| fig-cap: "Relative number of cell types per samples, based on annotation with scGate (PBMC model)."
+#| echo: false
+#| eval: !expr (!is.null(meta_data))
+#| warning: false
+#| fig-height: 4
+
+if (flags$GEX) {
+  result <- meta_data %>%
+    group_by(orig.ident, scGate_multi) %>%
+    summarize(cell_count = n()) %>%
+    ungroup() %>%
+    group_by(orig.ident) %>%
+    mutate(total_cells = sum(cell_count),
+          proportion = (cell_count / total_cells) * 100)  # Calculate proportion
+
+  # Create the stacked bar plot
+  stacked_bar_plot <- ggplot(result, aes(x = orig.ident, y = proportion, fill = scGate_multi)) +
+    geom_bar(stat = "identity") +
+    scale_fill_manual(values = custom_colors) +
+    labs(
+        x = "Sample",
+        y = "Percentage of cells (%)",
+        fill = "Cell Types"  # Change legend title here
+    ) +
+    theme_minimal() +
+    theme(
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.text = element_text(size = 8),         # Reduce legend text size
+        legend.title = element_text(size = 9),        # Reduce legend title size
+        legend.key.size = unit(0.4, "cm")             # Reduce legend key size
+    )
+
+  print(stacked_bar_plot)
+}
+```
+
+# VDJ-specific metrices
+
+```{r}
+#| label: QC-Alert-2
+#| echo: false
+#| warning: false
+#| results: asis
+#| eval: !expr (is.null(meta_data))
+
+if (is.null(meta_data)) {
+  cat("
+::: {.alert .alert-warning}
+⚠️ **Warning:** No cells passed the filtering condition. See filtering criteria.
+:::
+")
+}
+```
+
+## T-cell
+
+### Clonotype composition
+
+`r if (!flags$VDJT) 'No VDJ-T libraries were processed.'`
+
+::: {.callout-note collapse="true"}
+## Click to expand a table showing the clonal frequency ranges for each clone-size category.
+
+```{r}
+#| label: VDJ-metric-T-cell-clonotypes-table
+#| echo: false
+#| warning: false
+#| eval: !expr (!is.null(meta_data))
+
+if (flags$VDJT){
+  # Create a copy of meta_data and remove rows where cloneSize is NA
+  meta_data_filtered <- meta_data %>%
+    filter(VDJ_T_AVAIL == TRUE & !is.na(cloneSize))
+  # Berechne den minimalen und maximalen clonalFrequency-Wert für jede Clone-Size-Kategorie
+  clone_size_ranges <- meta_data_filtered %>%
+        group_by(cloneSize) %>%
+        summarise(
+          min_clonalFrequency = min(clonalFrequency, na.rm = TRUE),
+          max_clonalFrequency = max(clonalFrequency, na.rm = TRUE)
+        )
+
+  clone_size_ranges %>%
+    kable(caption = "Clonal Frequency Ranges by Clone-Size Category")
+}
+```
+
+:::
+
+```{r}
+#| label: VDJ-metric-T-cell-clonotypes-absolute
+#| fig-cap: "Absolute number of unique clonotypes per sample, categorized by expansion levels (e.g., hyperexpanded, large, medium, small, single)."
+#| echo: false
+#| warning: false
+#| eval: !expr (!is.null(meta_data))
+#| fig-height: 4
+
+if (flags$VDJT){
+  # Define the full mapping of cloneSize levels and corresponding colors
+  custom_colors <- c(
+    "Hyperexpanded (>0.1)"          = "#B83B5E",  # Hyperexpanded (Red)
+    "Large (0.01 < X <= 0.1)"       = "#F08A5D",  # Large (Orange)
+    "Medium (0.001 < X <= 0.01)"    = "#A0DEFF",  # Medium (Yellowish)
+    "Small (1e-04 < X <= 0.001)"    = "#5AB2FF",  # Small (Light Blue)
+    "Single"                        = "#003285"   # Single (Dark Blue),
+  )
+  # Create a named vector of all levels and colors
+  unqiue_clonotypes_sizes <- unique(meta_data_filtered$cloneSize)
+  clono.col <- custom_colors[names(custom_colors) %in% unqiue_clonotypes_sizes]
+
+  clone_size_counts <- meta_data_filtered %>%
+    group_by(orig.ident, cloneSize) %>%
+    summarise(count = n_distinct(CTstrict), .groups = 'drop')  # Count unique clonotypes
+
+  # Plot absolute number of clonotypes
+  plot_clone_size_absolute <- ggplot(clone_size_counts, aes(x = orig.ident, y = count, fill = cloneSize)) +
+    geom_bar(stat = "identity") +
+    labs(
+      x = "Sample",
+      y = "Absolute number of unique clonotypes",
+      fill = "Clonotype Size"  # Change legend title
+    ) +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    scale_fill_manual(values = clono.col)  # Drops unused categories from the legend
+
+  print(plot_clone_size_absolute)
+}
+
+```
+
+<br>
+
+```{r}
+#| label: VDJ-metric-T-cell-clonotypes-relatives
+#| fig-cap: "Relative number of clonotypes per sample, categorized by expansion levels (e.g., hyperexpanded, large, medium, small, single)."
+#| echo: false
+#| eval: !expr (!is.null(meta_data))
+#| warning: false
+#| fig-height: 4
+
+if (flags$VDJT){
+  # Count the number of cells per cloneSize per sample
+  clone_size_counts <- meta_data_filtered %>%
+    group_by(orig.ident, cloneSize) %>%
+    summarise(count = n_distinct(CTstrict), .groups = 'drop')  # Count unique clonotypes
+
+  # Calculate percentages within each sample
+  clone_size_percent <- clone_size_counts %>%
+    group_by(orig.ident) %>%
+    mutate(percentage = (count / sum(count)) * 100)
+
+  plot_clone_size_percentage <- ggplot(clone_size_percent, aes(x = orig.ident, y = percentage, fill = cloneSize)) +
+    geom_bar(stat = "identity", position = "fill") +  # Stacked bars with proportion scaling
+    scale_y_continuous(labels = scales::percent_format(scale = 1)) +  # Convert to percentage
+    scale_fill_manual(values = clono.col) +  # Use predefined colors
+    labs(x = "Sample",
+        y = "Percentage of Cells",
+        fill = "Clone Size") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
+          axis.text.y = element_text(size = 12),
+          plot.title = element_text(size = 14, face = "bold"))
+
+  print(plot_clone_size_percentage)
+}
+```
+
+## B-cell
+
+### Clonotype composition
+
+`r if (!flags$VDJB) 'No VDJ-B libraries were processed.'`
+
+::: {.callout-note collapse="true"}
+## Click to expand a table showing the clonal frequency ranges for each clone-size category.
+
+```{r}
+#| label: VDJ-metric-B-cell-clonotypes-table
+#| echo: false
+#| eval: !expr (!is.null(meta_data))
+#| warning: false
+
+if (flags$VDJB){
+  meta_data_filtered <- meta_data %>%
+      filter(VDJ_B_AVAIL == TRUE & !is.na(cloneSize))
+
+  # Berechne den minimalen und maximalen clonalFrequency-Wert für jede Clone-Size-Kategorie
+  clone_size_ranges <- meta_data_filtered %>%
+        group_by(cloneSize) %>%
+        summarise(
+          min_clonalFrequency = min(clonalFrequency, na.rm = TRUE),
+          max_clonalFrequency = max(clonalFrequency, na.rm = TRUE)
+        )
+
+  clone_size_ranges %>%
+    kable(caption = "Clonal Frequency Ranges by Clone-Size Category")
+}
+```
+
+:::
+
+```{r}
+#| label: VDJ-metric-B-cell-clonotypes-absolute
+#| fig-cap: "Absolute number of clonotypes per sample, categorized by expansion levels (e.g., hyperexpanded, large, medium, small, single)."
+#| echo: false
+#| warning: false
+#| eval: !expr (!is.null(meta_data))
+#| fig-height: 4
+
+if (flags$VDJB){
+  # Create a named vector of all levels and colors
+  unqiue_clonotypes_sizes <- unique(meta_data_filtered$cloneSize)
+  clono.col <- custom_colors[names(custom_colors) %in% unqiue_clonotypes_sizes]
+
+  # Get number of each cloneSize
+  clone_size_counts <- meta_data_filtered %>%
+    group_by(orig.ident, cloneSize) %>%
+    summarise(count = n_distinct(CTstrict), .groups = 'drop')  # Count unique clonotypes
+
+  # Plot absolute number of clonotypes
+  plot_clone_size_absolute <- ggplot(clone_size_counts, aes(x = orig.ident, y = count, fill = cloneSize)) +
+    geom_bar(stat = "identity") +
+    labs(
+      x = "Sample",
+      y = "Absolute number of unique clonotypes",
+      fill = "Clonotype Size"  # Change legend title
+    ) +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    scale_fill_manual(values = clono.col)  # Drops unused categories from the legend
+
+  print(plot_clone_size_absolute)
+
+}
+
+```
+
+
+<br>
+
+```{r}
+#| label: VDJ-metric-B-cell-clonotypes-relatives
+#| fig-cap: "Relative number of clonotypes per sample, categorized by expansion levels (e.g., hyperexpanded, large, medium, small, single)."
+#| echo: false
+#| warning: false
+#| eval: !expr (!is.null(meta_data))
+#| fig-height: 4
+
+if (flags$VDJB){
+  clone_size_counts <- meta_data_filtered %>%
+    group_by(orig.ident, cloneSize) %>%
+    summarise(count = n_distinct(CTstrict), .groups = 'drop')  # Count unique clonotypes
+
+  # Calculate percentages within each sample
+  clone_size_percent <- clone_size_counts %>%
+    group_by(orig.ident) %>%
+    mutate(percentage = (count / sum(count)) * 100)
+
+  plot_clone_size_percentage <- ggplot(clone_size_percent, aes(x = orig.ident, y = percentage, fill = cloneSize)) +
+    geom_bar(stat = "identity", position = "fill") +  # Stacked bars with proportion scaling
+    scale_y_continuous(labels = scales::percent_format(scale = 1)) +  # Convert to percentage
+    scale_fill_manual(values = clono.col) +  # Use predefined colors
+    labs(x = "Sample",
+        y = "Percentage of Cells",
+        fill = "Clone Size") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
+          axis.text.y = element_text(size = 12),
+          plot.title = element_text(size = 14, face = "bold"))
+
+  print(plot_clone_size_percentage)
+}
+```
+
+
+:::

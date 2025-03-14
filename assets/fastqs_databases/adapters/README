@@ -1,0 +1,7 @@
+#!/bin/sh
+
+# https://github.com/csf-ngs/fastqc/blob/master/Contaminants/contaminant_list.txt
+
+module load Bowtie2/2.3.4.2-foss-2018b
+
+bowtie2-build seq_adapters.fa seq_adapters > seq_adapters.bowtie2.stdout 2> seq_adapters.bowtie2.stderr

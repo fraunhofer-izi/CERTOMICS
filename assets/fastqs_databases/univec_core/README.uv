@@ -1,0 +1,170 @@
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+              README for UniVec & UniVec_Core databases
+
+                   (Last updated 22 May 2017)
+
+This document describes files that can be obtained by anonymous FTP
+from the NCBI directory:  ftp://ftp.ncbi.nlm.nih.gov/pub/UniVec/
+
+......................................................................
+FILENAME      VERSION       DESCRIPTION            FORMAT
+--------      -------       -----------            ------
+README.uv     22-May-2017   This document          Text
+UniVec        build 10.0    UniVec database        FASTA/Pearson
+UniVec_Core   build 10.0    UniVec_Core database   FASTA/Pearson
+......................................................................
+
+If you have any questions not answered here or on the NCBI web site
+(http://www.ncbi.nlm.nih.gov/tools/vecscreen/univec/) please contact:
+
+National Center for Biotechnology Information (NCBI)
+National Library of Medicine, National Institutes of Health
+Bldg. 38A, Rm. 8N805, 8600 Rockville Pike, Bethesda, MD 20894, USA.
+tel: (301) 496-2475  fax: (301) 480-9241  email: info@ncbi.nlm.nih.gov        
+......................................................................
+
+                 **********************************
+                 * UniVec & UniVec_Core Databases *
+                 **********************************
+
+CONTENTS:
+1. REFERENCE
+2. DESCRIPTION
+3. APPLICATIONS FOR UNIVEC & UNIVEC_CORE
+4. UNIVEC DEFINITION LINE FORMAT
+5. SOURCES OF THE SEQUENCES IN UNIVEC
+6. DISCLAIMER
+
+
+REFERENCE: 
+========= 
+Please cite the following if you use the UniVec or UniVec_Core
+databases: 
+http://www.ncbi.nlm.nih.gov/tools/vecscreen/univec/
+
+
+DESCRIPTION:
+===========
+UniVec is a non-redundant database of sequences commonly attached to
+cDNA or genomic DNA during the cloning process.  It was developed by
+staff at the National Center for Biotechnology Information, part of
+the National Library of Medicine at the National Institutes of
+Health. UniVec_Core is a subset of the full UniVec database.
+
+UniVec primarily consists of the unique segments from a large number
+of vectors but also includes many linker, adapter and primer
+sequences. Redundant sub-sequences have been eliminated from the
+database to make searches more efficient and to simplify
+interpretation of the results.
+
+A detailed description of UniVec is available on the web:
+  http://www.ncbi.nlm.nih.gov/VecScreen/UniVec.html
+
+
+APPLICATIONS FOR UNIVEC & UNIVEC_CORE:
+=====================================
+Screening for vector and linker/adapter contamination in nucleic acid
+sequences.
+
+UniVec
+------
+UniVec is designed for use in applications where a scientist will
+review the hits to weed out the occasional false positive. The
+sequences included in UniVec are chosen to maximize the detection of
+contamination with the understanding that a few false positive hits
+are acceptable.
+       
+UniVec_Core
+-----------
+UniVec_Core is designed for use in applications where the hits will be
+automatically processed without any human review. The sequences in
+UniVec_Core are a subset of those from the full UniVec database chosen
+to minimize the number of false positive hits.
+
+UniVec_Core includes only oligonucleotides and vectors consisting of
+bacterial, phage, viral, yeast or synthetic sequences. Vectors that
+include sequences of mammalian origin are excluded. Consequently, some
+vector contamination that could be detected using the full UniVec
+database may be missed when UniVec_Core is used.
+
+
+UNIVEC DEFINITION LINE FORMAT:
+=============================
+Example UniVec Definition Line:
+  gnl|uv|L08786.1:609-673 BlueScribe SK Minus cloning vector
+  ------ 1 ------|-- 2 --|--------------- 3 ---------------- 
+
+The definition line for a segment in the UniVec database is composed
+of three parts.
+ 
+1. The UniVec identifier for the parent sequence.
+The first section (gnl|uv) indicates that the sequence is part of the
+UniVec database. The last section is either the GenBank identifier
+(Accession number.version) for the parent sequence, or an identifier
+of the form NGBxxxxx.x if the parent sequence is not in GenBank.
+ 
+2. A span specifying the location of the segment within the parent
+sequence. Double spans, e.g. 2964-3005-49, indicate that the segment
+crosses the end/beginning junction of a parental sequence that was
+pseudo-circularized.
+ 
+3. A short description of the sequence. 
+
+
+SOURCES OF THE SEQUENCES IN UNIVEC:
+==================================
+Most of the sequences in UniVec were derived from GenBank entries. 
+In these cases, the parent sequence and annotation (when available) 
+can be obtained from NCBI's Nucleotide resource
+(http://www.ncbi.nlm.nih.gov/nucleotide/) using the GenBank 
+Accession number.version from the UniVec definition line (see above).
+
+The sequences for some commercial vectors, linkers, adapters and
+primers that are not available in GenBank were obtained from company
+web sites or product literature. UniVec entries derived from such
+non-GenBank sequences have a definition line containing an identifier
+of the form NGBxxxxx.x (see above). The most up-to-date versions of
+these non-GenBank sequences, and in many cases annotations, can be
+obtained from the web site of the company concerned (listed below).
+
+NCBI is grateful to the following companies who have enabled us to
+improve the effectiveness of our UniVec databases by allowing us to
+include their non-GenBank sequences.
+
+Agilent Technologies                     Web: www.genomics.agilent.com
+5301 Stevens Creek Blvd                  Tel: +1-408-345-8866
+Santa Clara, California 95051, USA.
+
+CLONTECH Laboratories Inc.               Web: www.clontech.com
+1290 Terra Bella Avenue                  Tel: +1-650-919-7300
+Mountain View, California 94303, USA.
+
+Illumina Inc.                            Web: www.illumina.com
+200 Illumina Way                         Tel: +1-858-202-4566
+San Diego, California 92122 USA.
+
+New England Biolabs, Inc.                Web: www.neb.com
+240 County Road                          Tel: +1-978-927-5054
+Ipswich, Massachusetts 01938-2723, USA.
+
+Promega Corporation                      Web: www.promega.com
+2800 Woods Hollow Road                   Tel: +1-608-274-4330
+Madison, Wisconsin 53711-5399, USA.
+
+ThermoFisher Scientific                  Web: www.thermofisher.com
+168 Third Avenue                         Tel: +1-800-955-6288
+Waltham, Massachusetts 02451, USA.
+
+
+DISCLAIMER:
+==========
+The United States Government makes no representations or warranties
+regarding the content or accuracy of the information.  The United
+States Government also makes no representations or warranties of
+merchantability or fitness for a particular purpose or that the use of
+the sequences will not infringe any patent, copyright, trademark, or
+other rights.  The Government accepts no responsibility for any
+consequence of the receipt or use of the information.
+
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

@@ -1,0 +1,6 @@
+#!/bin/sh
+
+module load Bowtie2/2.3.4.2-foss-2018b
+
+bowtie2-build /mnt/fhgfs_ribdata/databases/ncbi/pub/univec/fasta/UniVec.fa UniVec > UniVec.bowtie2.stdout 2> UniVec.bowtie2.stderr
+bowtie2-build /mnt/fhgfs_ribdata/databases/ncbi/pub/univec/fasta/UniVec_Core.fa UniVec_Core > UniVec_Core.bowtie2.stdout 2> UniVec_Core.bowtie2.stderr

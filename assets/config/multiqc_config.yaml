@@ -1,0 +1,113 @@
+#######################################
+# Example MultiQC Configuration File
+#######################################
+---
+# Title to use for the report.
+title: 
+
+# Prepend sample names with their directory. Useful if analysing the
+# sample samples with different parameters.
+prepend_dirs: False
+
+# Default output filenames
+# example for PATTERN: FC1-180723_D00594_0088_BCADRWANXX
+output_fn_name: multiqc-report.html
+data_dir_name: multiqc-data
+
+# Whether to create the parsed data directory in addition to the report
+make_data_dir: True
+
+extra_fn_clean_exts:
+    - '.gz'
+    - '.fastq'
+    - '.fq'
+    - '.bam'
+    - '.sam'
+    - '.sra'
+    - '_tophat'
+    - '_star_aligned'
+    - '_fastqc'
+    - '.pair1.truncated'
+    - '.pair2.truncated'
+    - '-summary'
+    - '_screen'
+    - 'infer_experiment'
+    - '.settings'
+    - '-htseq'
+    - '-hisat2'
+    - 'junction_annotation_stderr'
+    - '_R1'
+    - '_R2'
+    - type: 'remove'
+      pattern: '.sorted'
+    - type: 'regex'
+      pattern: '^Sample_\d+'
+    - type: 'regex_keep'
+      pattern: '[A-Z]{3}[1-9]{4}[A,B][1-9]'
+
+# Ignore these files / directories / paths when searching for logs
+fn_ignore_files:
+    - '.DS_Store'
+    - '.*'
+    - '-annotation*.yaml'
+
+fn_ignore_dirs:
+    - 'successive_screen*'
+    - 'temp'
+    - 'fastqc_rawdata'
+    - 'evo'
+
+module_order:
+    - fastqc:
+        name: 'FastQC Read1'
+        path_filters:
+            - '*R1_001_fastqc.zip'
+    - fastqc:
+        name: 'FastQC Rread2'
+        path_filters:
+            - '*R2_001_fastqc.zip'
+
+preseq:
+    notrim: true
+
+sp:
+    fastqc/zip:
+        fn: '*_fastqc.zip'
+
+rseqc_sections:
+    #- bam_stat
+    - gene_body_coverage
+    - read_duplication
+    - inner_distance
+    - infer_experiment
+    - junction_annotation
+    - junction_saturation
+
+# Overwrite the defaults of which table columns are visible by default
+table_columns_visible:
+    FastQC:
+        percent_fails: False
+        total_sequences: True
+
+# MultiQC skips a couple of debug messages when searching files as the
+# log can get very verbose otherwise. Re-enable here to help debugging.
+report_readerrors: False
+report_imgskips: False
+
+# Opt-out of remotely checking that you're running the latest version
+no_version_check: False
+
+# How to plot graphs. Different templates can override these settings, but
+# the default template can use interactive plots (Javascript using HighCharts)
+# or flat plots (images, using MatPlotLib). With interactive plots, the report
+# can prevent automatically rendering all graphs if there are lots of samples
+# to prevent the browser being locked up when the report opens.
+plots_force_flat: False          # Try to use only flat image graphs
+plots_force_interactive: False   # Try to use only interactive javascript graphs
+plots_flat_numseries: 100        # If neither of the above, use flat if > this number of datasets
+num_datasets_plot_limit: 51      # If interactive, don't plot on load if > this number of datasets
+max_table_rows: 500              # Swap tables for a beeswarm plot above this
+
+# Sample-IDs of other Flowcells
+#sample_names_ignore:
+#    - <RIB_BARCODES>

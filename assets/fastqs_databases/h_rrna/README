@@ -1,0 +1,5 @@
+#!/bin/sh
+
+module load Bowtie2/2.3.4.2-foss-2018b
+
+bowtie2-build /mnt/fhgfs_ribdata/databases/ncbi/refseq/human-rRNA/fasta/human_rRNA.fa human_rRNA > human_rRNA.bowtie2.stdout 2> human_rRNA.bowtie2.stderr

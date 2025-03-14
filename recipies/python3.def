@@ -1,0 +1,37 @@
+Bootstrap: docker
+From: python:3.10-slim
+
+%labels
+    Author David Schmidt
+    Version v1.0.0
+
+%post
+    DEBIAN_FRONTEND=noninteractive
+    apt-get update && apt-get install -y --no-install-recommends bash procps
+    apt-get clean
+    pip install --no-cache-dir \
+        matplotlib==3.7.5 \
+        numpy==1.24.4 \
+        jinja2==3.1.4 \
+        pandas==2.0.3 \
+        pyfaidx==0.8.1.1 \
+        pysam==0.22.1 \
+        gffutils==0.13 \
+        pygenomeviz==0.4.4
+
+%test
+    # testing for tools required by Nextflow
+    command -v awk   >/dev/null || { echo "awk is missing"; exit 1; }
+    command -v date  >/dev/null || { echo "date is missing"; exit 1; }
+    command -v grep  >/dev/null || { echo "grep is missing"; exit 1; }
+    command -v ps    >/dev/null || { echo "ps is missing"; exit 1; }
+    command -v sed   >/dev/null || { echo "sed is missing"; exit 1; }
+    command -v tail  >/dev/null || { echo "tail is missing"; exit 1; }
+    command -v tee   >/dev/null || { echo "tee is missing"; exit 1; }
+
+    # testing for bash (path and version)
+    command -v bash  >/dev/null || { echo "bash is missing"; exit 1; }
+    BASH_VERSION=$(bash --version | head -n 1 | awk '{print $4}' | cut -d. -f1)
+    [ "$BASH_VERSION" -gt 3 ]  || { echo "bash version $BASH_VERSION is too old. Expecting 3.x or later"; exit 1; }
+    [ -x /bin/bash ]           || { echo "bash is not in /bin/bash or /usr/bin/bash"; exit 1; }
+

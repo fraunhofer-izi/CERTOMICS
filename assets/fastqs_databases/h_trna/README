@@ -1,0 +1,5 @@
+#!/bin/sh
+
+module load Bowtie2/2.3.4.2-foss-2018b
+
+bowtie2-build /mnt/fhgfs_ribdata/databases/GtRNAdb/fasta/hg38-tRNAs.fa hg38-tRNAs > hg38-tRNAs.bowtie2.stdout 2> hg38-tRNAs.bowtie2.stderr

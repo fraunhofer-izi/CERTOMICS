@@ -1,0 +1,5 @@
+#!/bin/sh
+
+module load Bowtie2/2.3.4.2-foss-2018b
+
+bowtie2-build /mnt/fhgfs_ribdata/databases/rnammer/fasta/rnammer-1.2.fsa rnammer-1.2 > rnammer-1.2.bowtie2.stdout 2> rnammer-1.2.bowtie2.stderr
