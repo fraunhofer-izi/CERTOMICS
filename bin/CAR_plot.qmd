@@ -208,7 +208,7 @@ if flags["GEX"]:
 #| warning: false
 
 if flags["GEX"]:
-  CAR_quality_plot.plot_read_metrices(read_metrics, r.params['gtf'])
+  CAR_quality_plot.plot_read_metrices(read_metrics)
 ```
 
 ## Count-level
@@ -540,7 +540,9 @@ if (flags$VDJT){
       fill = "Clonotype Size"  # Change legend title
     ) +
     theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
+          axis.text.y = element_text(size = 12),
+          plot.title = element_text(size = 14, face = "bold"))
     scale_fill_manual(values = clono.col)  # Drops unused categories from the legend
 
   print(plot_clone_size_absolute)
@@ -646,7 +648,9 @@ if (flags$VDJB){
       fill = "Clonotype Size"  # Change legend title
     ) +
     theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
+          axis.text.y = element_text(size = 12),
+          plot.title = element_text(size = 14, face = "bold"))
     scale_fill_manual(values = clono.col)  # Drops unused categories from the legend
 
   print(plot_clone_size_absolute)
