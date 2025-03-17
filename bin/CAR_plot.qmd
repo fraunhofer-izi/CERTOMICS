@@ -540,9 +540,12 @@ if (flags$VDJT){
       fill = "Clonotype Size"  # Change legend title
     ) +
     theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
-          axis.text.y = element_text(size = 12),
-          plot.title = element_text(size = 14, face = "bold"))
+    theme(
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.text = element_text(size = 8),         # Reduce legend text size
+        legend.title = element_text(size = 9),        # Reduce legend title size
+        legend.key.size = unit(0.4, "cm")             # Reduce legend key size
+    ) +
     scale_fill_manual(values = clono.col)  # Drops unused categories from the legend
 
   print(plot_clone_size_absolute)
@@ -579,9 +582,12 @@ if (flags$VDJT){
         y = "Percentage of Cells",
         fill = "Clone Size") +
     theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
-          axis.text.y = element_text(size = 12),
-          plot.title = element_text(size = 14, face = "bold"))
+    theme(
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.text = element_text(size = 8),         # Reduce legend text size
+        legend.title = element_text(size = 9),        # Reduce legend title size
+        legend.key.size = unit(0.4, "cm")             # Reduce legend key size
+    ) 
 
   print(plot_clone_size_percentage)
 }
@@ -648,9 +654,12 @@ if (flags$VDJB){
       fill = "Clonotype Size"  # Change legend title
     ) +
     theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
-          axis.text.y = element_text(size = 12),
-          plot.title = element_text(size = 14, face = "bold"))
+    theme(
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.text = element_text(size = 8),         # Reduce legend text size
+        legend.title = element_text(size = 9),        # Reduce legend title size
+        legend.key.size = unit(0.4, "cm")             # Reduce legend key size
+    ) +
     scale_fill_manual(values = clono.col)  # Drops unused categories from the legend
 
   print(plot_clone_size_absolute)
@@ -688,9 +697,12 @@ if (flags$VDJB){
         y = "Percentage of Cells",
         fill = "Clone Size") +
     theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
-          axis.text.y = element_text(size = 12),
-          plot.title = element_text(size = 14, face = "bold"))
+    theme(
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.text = element_text(size = 8),         # Reduce legend text size
+        legend.title = element_text(size = 9),        # Reduce legend title size
+        legend.key.size = unit(0.4, "cm")             # Reduce legend key size
+    )
 
   print(plot_clone_size_percentage)
 }
