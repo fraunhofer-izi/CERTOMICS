@@ -69,19 +69,19 @@
         },
         "gene_expression_source_fa": {
           "type": "string",
-          "description": "Genome to build a gene expression reference with at runtime"
+          "description": "Genome to build a gene expression reference with at runtime. Attention: Must match 10X Genomics reference version 2020 or 2024: https://www.10xgenomics.com/support/software/cell-ranger/downloads/cr-ref-build-steps"
         },
         "gene_expression_source_gtf": {
           "type": "string",
-          "description": "Annotation to build a gene expression reference with at runtime"
+          "description": "Annotation to build a gene expression reference with at runtime. Attention: Must match 10X Genomics reference version 2020 or 2024: https://www.10xgenomics.com/support/software/cell-ranger/downloads/cr-ref-build-steps"
         },
         "gene_expression_reference_version": {
           "type": "string",
-          "description": "Template version to build the pipeline with ('2020' / '2024')"
+          "description": "Template version to build the pipeline with ('2020' / '2024' default) prebuild GEX 10x Genomics references. If no --gene_expression_source_fa and --gene_expression_source_gtf is given, matching .fa and .gtf versions according to 10x will be downloaded. "
         },
         "gene_expression_car_fa": {
           "type": "string",
-          "description": "CAR genome to add to gene expression reference at runtime"
+          "description": "CAR sequence to add to gene expression reference at runtime"
         },
         "gene_expression_car_gtf": {
           "type": "string",
@@ -89,11 +89,11 @@
         },
         "vdj_reference": {
           "type": "string",
-          "description": "A prebuilt 10xGenomics compatible VDJ reference"
+          "description": "A prebuilt 10xGenomics compatible VDJ reference: https://www.10xgenomics.com/support/software/cell-ranger/downloads"
         },
         "feature_reference": {
           "type": "string",
-          "description": "A prebuilt 10xGenomics compatible feature reference"
+          "description": "A prebuilt 10xGenomics compatible feature reference: https://www.10xgenomics.com/support/software/cell-ranger/downloads"
         },
         "gene_expression_source_fa_url": {
           "type": "string",
