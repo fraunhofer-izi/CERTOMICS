@@ -537,7 +537,7 @@ if (flags$VDJT){
     labs(
       x = "Sample",
       y = "Absolute number of unique clonotypes",
-      fill = "Clonotype Size"  # Change legend title
+      fill = "Clone size"  # Change legend title
     ) +
     theme_minimal() +
     theme(
@@ -651,7 +651,7 @@ if (flags$VDJB){
     labs(
       x = "Sample",
       y = "Absolute number of unique clonotypes",
-      fill = "Clonotype Size"  # Change legend title
+      fill = "Clone size"  # Change legend title
     ) +
     theme_minimal() +
     theme(
