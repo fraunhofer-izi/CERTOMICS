@@ -35,10 +35,10 @@ workflow {
     RUN_SECONDARY_ANALYSIS (
         safe_params.samples,
         HANDLE_GEX_REFERENCE.out,
-        safe_params.vdj_reference   ?: [],
-        safe_params.feat_reference  ?: [],
-        safe_params.gex_car_fa  ?: [],
-        safe_params.gex_car_gtf ?: []
+        safe_params.vdj_reference,
+        safe_params.feat_reference,
+        safe_params.gex_car_fa,
+        safe_params.gex_car_gtf
     )
 
     // Run QC
