@@ -249,9 +249,9 @@ workflow RUN_SECONDARY_ANALYSIS {
     CELLRANGER_MULTI (
         params.cellranger_cluster_template ?: [],
         sample_library_paths,
-        gex_reference,
-        vdj_reference,
-        feat_reference,
+        gex_reference.value ?: [],
+        vdj_reference.value ?: [],
+        feat_reference.value ?: [],
         samples
     )
 
