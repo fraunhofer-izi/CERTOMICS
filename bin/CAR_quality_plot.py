@@ -14,6 +14,9 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from pygenomeviz import GenomeViz
 from matplotlib.patches import Patch
+import math
+import plotly.graph_objs as go
+from plotly.subplots import make_subplots
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -101,110 +104,173 @@ def plot_coverage(cov_all, cov_unique, gtf_path_car):
     """
     samples = cov_all.columns.tolist()
 
-    coverage_plot(samples, gtf_path_car, cov_all, cov_unique)
+    interactive_coverage_plot(samples, cov_all, cov_unique, gtf_path_car)
+    
 
-
-def coverage_plot(samples, gtf_path_car, cov_all, cov_unique):
-    """
-    Generate a coverage plot for the given samples and CAR construct.
-    """
-    plt.rcParams.update({'font.size': 14})
-
-    #get max_end from gtf_path_car
-    car_start_end = get_car_start_end_from_gtfs(gtf_path_car)
-    car = car_start_end[0]
-
-    max_end = car_start_end[2]
-
-    cov_all_dict = {col: cov_all[col][0] for col in cov_all.columns}
-    cov_unique_dict = {col: cov_unique[col][0] for col in cov_unique.columns}
-
-    # Calculate the global maximum coverage across all samples
-    global_max_coverage = max(
-        max(max(values) for values in cov_all_dict.values()),
-        max(max(values) for values in cov_unique_dict.values())
-    )
-
-    #Use pyGenomeWiz to plot the coverage profile
-    gv = GenomeViz(tick_style="axis", fig_track_height=0.8)
-    track = gv.add_feature_track(car, max_end)
-
-    colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
-               "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"]
-
-    color_index = 0
-    #get start stop from each line in gtf_path_car
-    #print(f"GTF of CAR construct used at: {gtf_path_car}")
+def interactive_coverage_plot(samples, cov_all, cov_unique, gtf_path_car, output_html="interactive_coverage.html"):
+    # === Parse GTF for exon features ===
+    exon_features = []
+    max_end = 0
     with open(gtf_path_car, encoding="utf-8") as f:
         for line in f:
             parts = line.strip().split("\t")
-            if len(parts) != 9:
-                logging.error(
-                    "Error: The GTF file at %s is not formatted correctly.",
-                    gtf_path_car)
-            if car in line:
-                if line.strip().split("\t")[2] =="transcript":
-                    continue
-                start = int(line.strip().split("\t")[3])
-                end = int(line.strip().split("\t")[4])
+            if len(parts) != 9 or parts[2] == "transcript":
+                continue
+            start = int(parts[3])
+            end = int(parts[4])
+            max_end = max(max_end, end)
+            attributes = {
+                k.strip(): v.strip().strip('"')
+                for attr in parts[8].split(";") if attr
+                for k, v in [attr.strip().split(" ", 1)]
+            }
+            exon_id = attributes.get("exon_id", "Exon")
+            exon_features.append((start, end, exon_id))
 
-                attributes = line.strip().split("\t")[-1].split(";")
-                parsed_attrs = {
-                    k.strip(): v.strip().strip('"')
-                    for attr in attributes if attr
-                    for k, v in [attr.strip().split(" ", 1)]
-                }
-                exon_id = parsed_attrs.get("exon_id", "Exon ID not found")
-                track.add_feature(
-                    start, end,
-                    label=exon_id,
-                    facecolor=colors[color_index % len(colors)],
-                    edgecolor="black",
-                    linewidth=0.5
-                )
-                color_index += 1
+    # === Build coverage data ===
+    cov_all_dict = {col: cov_all[col][0] for col in cov_all.columns}
+    cov_unique_dict = {col: cov_unique[col][0] for col in cov_unique.columns}
+
+    row_heights = [0.15]  # GTF feature track at top
+    row_names = ["Features"]
 
     for sample in samples:
-        gv.get_track(car).add_subtrack(name=sample+"all_reads")
-        gv.get_track(car).add_subtrack(name=sample+"unique_reads")
+        max_val = max(max(cov_all_dict[sample]), max(cov_unique_dict[sample]))
+        row_heights.append(max_val)
+        row_names.append(sample)
 
+    # Normalize row heights
+    log_heights = [math.log10(h + 1) for h in row_heights]  # +1 to avoid log(0)
+    norm_heights = [max(h / max(log_heights), 0.1) for h in log_heights]
 
-    fig = gv.plotfig()
+    fig = make_subplots(
+        rows=len(row_names),
+        cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.01,
+        row_heights=norm_heights
+    )
 
-    for sample in samples:
-        coverage = cov_all_dict[sample]
-        coverage_unique = cov_unique_dict[sample]
+    pos_list = np.arange(1, max_end + 1)
 
-        pos_list = np.arange(1, max_end + 1)
-        subtrack = gv.get_track(car).get_subtrack(sample+"all_reads")
-        subtrack.ax.fill_between(pos_list, coverage, alpha=0.6, color="#7e4794")
+    fig.update_yaxes(
+        range=[0, 1],              # restrict y-axis to exact arrow height
+        showticklabels=False,
+        showgrid=False,
+        fixedrange=True,           # prevent zoom from stretching it again
+        row=1, col=1
+    )
 
-        subtrack_2 = gv.get_track(car).get_subtrack(sample+"unique_reads")
-        subtrack_2.ax.fill_between(pos_list, coverage_unique, alpha=0.6, color="#59a89c")
+    y0 = 0
+    y1 = 1  
+    y_center = 0.5
+    arrow_tip_length = 10
 
-        subtrack.ax.set_ylim(0, global_max_coverage + 10)
-        subtrack_2.ax.set_ylim(0, global_max_coverage + 10)
+    colors = [
+        "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728",
+        "#9467bd", "#8c564b", "#e377c2", "#7f7f7f",
+        "#bcbd22", "#17becf"
+    ]
 
-        subtrack.ax.text(
-            gv.top_track.offset,
-            global_max_coverage / 2,
-            sample,
-            ha="right",
-            va="center"
+    for i, (start, end, exon_id) in enumerate(exon_features):
+        # Avoid negative arrow base if exon too short
+        arrow_base = max(start, end - arrow_tip_length)
+
+        path = (
+            f"M {start},{y0} "
+            f"L {arrow_base},{y0} "
+            f"L {end},{y_center} "
+            f"L {arrow_base},{y1} "
+            f"L {start},{y1} "
+            f"Z"
         )
 
-    handles = [
-        Patch(color="#7e4794", alpha=0.6, label="All reads"),
-        Patch(color="#59a89c",alpha=0.6, label="Uniquely mapped reads"),
-    ]
-    fig.legend(
-        handles=handles,
-        loc='upper center',
-        bbox_to_anchor=(0.5, -0.05),
-        ncol=2,
-        fontsize=14
+        fig.add_shape(
+            type="path",
+            path=path,
+            xref="x",
+            yref="y1",
+            fillcolor=colors[i % len(colors)],
+            line=dict(color="black"),
+            layer="below"
+        )
+
+        fig.add_annotation(
+            x=(start + end) // 2,
+            y=0.99,
+            xref='x',
+            yref='y1',
+            text=exon_id,
+            showarrow=True,
+            arrowhead=2,
+            ax=0,
+            ay=-40,
+            font=dict(size=10),
+            textangle=-45
+        )
+
+    # === Add coverage plots ===
+    for i, sample in enumerate(samples):
+        all_y = cov_all_dict[sample]
+        unique_y = cov_unique_dict[sample]
+        row = i + 2
+
+        # Add all reads first
+        fig.add_trace(go.Scatter(
+            x=pos_list,
+            y=all_y,
+            name="All reads",
+            fill='tozeroy',
+            mode='lines',
+            line=dict(color="rgba(126, 71, 148, 0.8)", width=2.5),  # purple, transparent
+            showlegend=(i == 0),
+        ), row=row, col=1)
+
+        # Then uniquely mapped reads — this one will appear on top
+        fig.add_trace(go.Scatter(
+            x=pos_list,
+            y=unique_y,
+            name="Unique reads",
+            fill='tozeroy',
+            mode='lines',
+            line=dict(color="rgba(89,168,156,0.3)"),
+            showlegend=(i == 0),
+        ), row=row, col=1)
+
+        # Add sample name as annotation (left of tracks)
+        fig.add_annotation(
+            xref="paper",
+            yref=f'y{row} domain',
+            x=-0.048,
+            y=0.5,
+            text=sample,
+            textangle=-90,
+            showarrow=False,
+            font=dict(size=13, color="black"),
+            xanchor="center"
+        )
+
+    fig.update_layout(
+        height= 100 + 120 * len(samples),
+        yaxis_title=None,
+        legend=dict(
+            orientation="h",
+            yanchor="top",
+            y=1.20,        # aligned with bottom edge of plot
+            xanchor="center",
+            x=0.5
+        ),
+        margin=dict(t=100, b=20, l=50, r=10)
     )
-    # fig.savefig("coverage_plot.png", bbox_inches='tight')
+    fig.update_yaxes(showgrid=False)
+    fig.update_xaxes(showgrid=False)
+    # Add x-axis title only to bottom subplot
+    num_rows = len(samples) + 1
+    fig.update_xaxes(title_text="Genomic Position", row=num_rows, col=1)
+
+    fig.write_html("coverage_plot.html")  # saved to current working directory
+    return fig
+
 
 def get_car_start_end_from_gtfs(gtf_path_car: str) -> Tuple[str,int,int]:
     """Get the CAR constructs from the GTF files.

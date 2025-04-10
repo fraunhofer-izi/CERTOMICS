@@ -21,6 +21,8 @@ params:
   gtf: "" #"Anno_Axicel.gtf"
   seurat_object: "" #"merged_seurat.rds"
   libraries: "" # example "1110" #flags according to use GEX, VDJT, VDJB, AntibodyCapture
+resources:
+  - coverage_plot.html
 ---
 
 ```{r}
@@ -49,7 +51,8 @@ for (pack in list.of.packages) {
 }
 library("reticulate")
 source("helper_functions.R")
-use_python("/usr/bin/python3", required = TRUE) 
+use_python("/homes/olymp/christina.kuhn/.conda/envs/LivingDrugOmics/bin/python3", required=TRUE)
+#use_python("/usr/bin/python3", required = TRUE) 
 ```
 
 :::{.panel-tabset .nav-pills}
@@ -189,13 +192,20 @@ flags = parse_binary_string(r.params['libraries'])
 #| echo: false
 #| eval: !expr (params["gtf"] != "none")
 #| warning: false
-
 import CAR_quality_plot
 if flags["GEX"]:
   read_metrics, cov_all, cov_unique = CAR_quality_plot.read_data(\
           r.params['results_metrics_reads_CAR'], r.params['results_coverage_against_CAR'], r.params['results_coverage_against_CAR_unique'])
 
-  CAR_quality_plot.plot_coverage(cov_all, cov_unique, r.params['gtf'])
+  CAR_quality_plot.plot_coverage(cov_all, cov_unique, r.params["gtf"])
+```
+
+```{=html}
+<!--| eval: !expr (params["gtf"] != "none") -->
+<iframe src="coverage_plot.html" width="100%" height="600px" frameborder="0"></iframe>
+<figcaption class="figure-caption" style="text-align: left; margin-top: 0.5em;">
+  Read coverage across the CAR construct is given. The x-axis presents nucleotide position within the CAR construct, while the y-axis shows the number of reads mapping to each nucleotide position. Coverage is depicted for two categories: uniquely mapped reads (in blue) and all mapped reads (in purple), which include both uniquely and multimapped reads, as determined by the STAR aligner.
+</figcaption>
 ```
 
 <br>
