@@ -42,6 +42,7 @@ process CELLRANGER_MULTI {
     publishDir "${params.outdir}/cellranger_multi/${task.tag}"
     label 'module_cellranger'
     label 'big_task'
+    fair true
     tag "${sample.name}"
 
     input:
@@ -60,6 +61,7 @@ process CELLRANGER_MULTI {
     path 'output/outs/per_sample_outs/*/count/sample_filtered_feature_bc_matrix', emit: feature_bc_matrix, optional: true
     path 'output/outs/per_sample_outs/*/vdj_t/filtered_contig_annotations.csv', emit: vdj_t_annotations, optional: true
     path 'output/outs/per_sample_outs/*/vdj_b/filtered_contig_annotations.csv', emit: vdj_b_annotations, optional: true
+    val  sample.name, emit: sample_name
 
     script:
     types = get_library_types(sample.libraries)
@@ -141,10 +143,7 @@ process SEURAT_OBJECT {
     path 'seurat_object.rds'
 
     script:
-    quoted_sample_names = samples.collect { sample -> "\"${sample.name}\"" }
     library_types = get_library_types(samples.collect { sample -> sample.libraries }.flatten() )
-    type_bits = get_sample_list_type_bits(samples)
-
     add_matrices = library_types[0] || library_types[3]
     add_annotation_b = library_types[1]
     add_annotation_t = library_types[2]
@@ -159,9 +158,9 @@ process SEURAT_OBJECT {
         ${matrices} \
         ${annotation_t} \
         ${annotation_b} \
-        ${quoted_sample_names.join(',')} \
+        ${samples.collect { sample -> "\"${sample.name}\"" }.join(',')} \
         "seurat_object.rds" \
-        "${type_bits}" \
+        "${get_sample_list_type_bits(samples)}" \
         "${annotation}"
     """
 }
@@ -182,11 +181,9 @@ process CAR_METRICS {
     path 'results_coverage_against_CAR_unique.csv', emit: coverage_unique
 
     script:
-    sample_names = samples.collect { sample -> sample.name }
-
     """
     CAR_quality.py \
-        --sample_names ${sample_names.join(' ')} \
+        --sample_names ${samples.collect { sample -> sample.name }.join(' ')} \
         --bam_files ${sample_alignments_bam.join(' ')} \
         --CAR_fasta_file ${car_fa} \
         --CAR_gtf_file ${car_gtf}
@@ -212,8 +209,6 @@ process QUARTO {
     path 'metrics_html'
 
     script:
-    type_bits = get_sample_list_type_bits(samples)
-
     """
     export HOME=\$(realpath "quarto-cache")
     quarto render ${car_plot_qmd} \
@@ -222,7 +217,7 @@ process QUARTO {
         -P results_metrics_reads_CAR:"${metrics_reads_car}" \
         -P results_coverage_against_CAR:"${metrics_coverage_car}" \
         -P results_coverage_against_CAR_unique:"${metrics_coverage_car_unique}" \
-        -P libraries:"${type_bits}" \
+        -P libraries:"${get_sample_list_type_bits(samples)}" \
         --no-cache
 
     mkdir metrics_html
@@ -244,16 +239,17 @@ workflow RUN_SECONDARY_ANALYSIS {
     car_gtf
 
     main:
-    sample_library_paths = samples.map { sample -> sample.libraries.collect { library -> library.path } }
-
     CELLRANGER_MULTI (
         params.cellranger_cluster_template ?: [],
-        sample_library_paths,
+        samples.map { sample -> sample.libraries.collect { library -> library.path } },
         gex_reference.value ?: [],
         vdj_reference.value ?: [],
         feat_reference.value ?: [],
         samples
     )
+
+    samples.collect.view{it -> "pre cr: " + it.name}
+    CELLRANGER_MULTI.out.sample_name.collect().view{it -> "post cr: " + it}
 
     do_sub_workflow = (car_fa.value && car_gtf.value)
     if (do_sub_workflow) {
