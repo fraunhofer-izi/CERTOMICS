@@ -248,9 +248,6 @@ workflow RUN_SECONDARY_ANALYSIS {
         samples
     )
 
-    samples.collect.view{it -> "pre cr: " + it.name}
-    CELLRANGER_MULTI.out.sample_name.collect().view{it -> "post cr: " + it}
-
     do_sub_workflow = (car_fa.value && car_gtf.value)
     if (do_sub_workflow) {
         SEURAT_OBJECT (
