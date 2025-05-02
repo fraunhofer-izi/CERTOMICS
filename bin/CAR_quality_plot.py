@@ -12,8 +12,6 @@ import ast
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
-from pygenomeviz import GenomeViz
-from matplotlib.patches import Patch
 import math
 import plotly.graph_objs as go
 from plotly.subplots import make_subplots
@@ -241,7 +239,7 @@ def interactive_coverage_plot(samples, cov_all, cov_unique, gtf_path_car, output
         fig.add_annotation(
             xref="paper",
             yref=f'y{row} domain',
-            x=-0.048,
+            x=-0.055,
             y=0.5,
             text=sample,
             textangle=-90,
@@ -267,6 +265,10 @@ def interactive_coverage_plot(samples, cov_all, cov_unique, gtf_path_car, output
     # Add x-axis title only to bottom subplot
     num_rows = len(samples) + 1
     fig.update_xaxes(title_text="Genomic Position", row=num_rows, col=1)
+
+    # # Save the plot as an image using Kaleido
+    # import plotly.io as pio
+    # pio.write_image(fig, "coverage_plot.png", format="png", scale=3)
 
     fig.write_html("coverage_plot.html")  # saved to current working directory
     return fig
