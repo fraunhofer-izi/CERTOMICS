@@ -353,9 +353,10 @@ def bar_plot(read_metrics, samples):
 
     # Formatting the plot
     ax.set_xticks(range(len(samples)))
-    ax.set_xticklabels(samples, rotation=45, fontsize=22)
-    ax.set_xlabel('Sample', fontsize=22)
-    ax.set_ylabel('Reads (abs.)', fontsize=22)
+    ax.set_xticklabels(samples, rotation=45, fontsize=24)
+    ax.set_xlabel('Sample', fontsize=24)
+    ax.set_ylabel('Reads (abs.)', fontsize=24)
+    ax.tick_params(axis='y', labelsize=24)  # <-- This line adjusts only y-axis ticks
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 

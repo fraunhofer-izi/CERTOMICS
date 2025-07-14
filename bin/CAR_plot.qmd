@@ -51,8 +51,8 @@ for (pack in list.of.packages) {
 }
 library("reticulate")
 source("helper_functions.R")
-use_python("/homes/olymp/christina.kuhn/.conda/envs/LivingDrugOmics/bin/python3", required=TRUE)
-#use_python("/usr/bin/python3", required = TRUE) 
+#use_python("/homes/olymp/christina.kuhn/.conda/envs/LivingDrugOmics/bin/python3", required=TRUE)
+use_python("/usr/bin/python3", required = TRUE) 
 ```
 
 :::{.panel-tabset .nav-pills}
@@ -225,11 +225,25 @@ if flags["GEX"]:
 
 ```{r}
 #| label: count-level-plots
-#| fig-cap: "Percentage of CAR-positive cells (count>0) compared to all T cells (CD4, CD8, gd) (based on scGate annotation). Absolute counts are displayed on top of the bars."
+#| fig-cap: "Percentage of CAR-positive cells (count>0) compared to all T cells (CD4, CD8, gd) (based on scGate annotation). Absolute counts of CD4 and CD8 CAR+ T cells are displayed on top of the bars."
 #| echo: false
 #| warning: false
 #| eval: !expr (params$gtf != "none")
 #| fig-height: 4
+
+# Custom general theme
+theme_custom <- function(base_size = 10, base_family = "") {
+  theme_minimal(base_size = base_size, base_family = base_family) +
+    theme(
+      axis.title = element_text(size = base_size + 2),
+      axis.text = element_text(size = base_size),
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      legend.title = element_text(size = base_size + 1),
+      legend.text = element_text(size = base_size),
+      plot.title = element_text(size = base_size + 2, face = "bold", hjust = 0.5),
+      strip.text = element_text(size = base_size + 1)  # For facets
+    )
+}
 
 car_construct_path = params$gtf
 lines <- readLines(car_construct_path)
@@ -240,111 +254,62 @@ first_line <- lines[1]
 car_construct <- strsplit(first_line, "\\s+")[[1]][1]
 
 if (flags$GEX && params$gtf != "none" && !is.null(meta_data)){
-  ############ CAR-plots
+  # Step 1: Filter for pure T cells
   t_cell_data <- meta_data %>%
     filter(is.pure_CD8T == "Pure" | is.pure_CD4T == "Pure" | is.pure_gdT == "Pure")
 
-  # Summarize T_CAR = TRUE counts as a percentage of all T_CAR
-  result <- t_cell_data %>%
+  # Step 2: Total T cells per sample
+  total_t_cells <- t_cell_data %>%
     group_by(orig.ident) %>%
-    summarize(
-      T_CAR_TRUE_count = sum(T_CAR == TRUE),
-      T_cell_total_count = n(),  # Total number of T cells in the group
-      percentage_T_CAR_TRUE = (T_CAR_TRUE_count / T_cell_total_count) * 100
-    )
+    summarise(total_T = n(), .groups = "drop")
 
-  plot_car_proportion <- ggplot(result, aes(x = orig.ident, y = percentage_T_CAR_TRUE)) +
-    geom_bar(stat = "identity", fill = "#0b81a2") +
-    geom_text(aes(label = T_CAR_TRUE_count),
-              vjust = -0.5,  # Adjusts text position above bars
-              size = 3,  # Adjust text size
-              fontface = "bold") +  # Make text bold
+  # Step 3: CAR+ CD4 and CD8 counts per sample
+  car_t_cells <- t_cell_data %>%
+    filter(T_CAR == TRUE) %>%
+    mutate(T_cell_type = case_when(
+      is.pure_CD4T == "Pure" ~ "CD4",
+      is.pure_CD8T == "Pure" ~ "CD8",
+      TRUE ~ NA_character_
+    )) %>%
+    filter(!is.na(T_cell_type)) %>%
+    group_by(orig.ident, T_cell_type) %>%
+    summarise(CAR_count = n(), .groups = "drop")
+
+  # Step 4: Merge and calculate % of all T cells
+  car_percent <- car_t_cells %>%
+    left_join(total_t_cells, by = "orig.ident") %>%
+    mutate(percentage = (CAR_count / total_T) * 100)
+
+  car_percent <- car_percent %>%
+  mutate(
+    text_color = ifelse(T_cell_type == "CD4", "black", "white")
+  )
+
+  # Step 5: Create stacked barplot
+  plot_car_proportion <- ggplot(car_percent, aes(x = orig.ident, y = percentage, fill = T_cell_type)) +
+    geom_bar(stat = "identity") +
+    geom_text(
+      aes(label = CAR_count, color = text_color),
+      position = position_stack(vjust = 0.5),
+      size = 3,
+      fontface = "bold"
+    ) +
+    scale_fill_manual(
+      values = c("CD4" = "#6FC1CD", "CD8" = "#005B7F")
+    ) +
+    scale_color_identity(guide = "none") +  # Directly uses the color value without legend
     labs(
-        x = "Sample",
-        y = "CAR+ Cells (% of all T cells)") +
-    ylim(0, max(100) * 1.1) +  # Increase ylim slightly to make space for labels
+      x = "Sample",
+      y = "CAR+ Cells (% of all T cells)",
+      fill = "T cell type"
+    ) +
+    scale_y_continuous(limits = c(0, 100), expand = c(0, 0)) +
     theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +  theme_custom(base_size = 10)  # Apply the general theme
+
+
 
   print(plot_car_proportion)
-}
-```
-
-<br>
-
-```{r}
-#| label: count-level-plots2
-#| fig-cap: "Percentage of CAR-positive cells (count>0) compared to all CD4+ (A) and CD8+ (B) T cells (scGate annotation PBMC model). Absolute counts are displayed on top of the bars."
-#| echo: false
-#| warning: false
-#| eval: !expr (params$gtf != "none")
-#| fig-height: 4
-
-if (flags$GEX && params$gtf != "none" && !is.null(meta_data)){
-  # Filter and summarize data for pure CD8+ T cells
-  summary_cd8_pure <- meta_data %>%
-    filter(is.pure_CD8T == "Pure") %>%  # Only pure CD8+ T cells
-    group_by(orig.ident) %>%
-    summarise(
-      total_cd8_pure_cells = n(),  # Total pure CD8+ cells
-      CAR_cells = sum(CAR_BY_EXPRS == TRUE),  # Number of CAR+ cells
-      proportion_CAR = CAR_cells / total_cd8_pure_cells  # Proportion of CAR+ cells
-    )
-
-  # Filter and summarize data for pure CD4+ T cells
-  summary_cd4_pure <- meta_data %>%
-    filter(is.pure_CD4T == "Pure") %>%  # Only pure CD4+ T cells
-    group_by(orig.ident) %>%
-    summarise(
-      total_cd4_pure_cells = n(),  # Total pure CD4+ cells
-      CAR_cells = sum(CAR_BY_EXPRS == TRUE),  # Number of CAR+ cells
-      proportion_CAR = CAR_cells / total_cd4_pure_cells  # Proportion of CAR+ cells
-    )
-
-  # Plot for pure CD8+ T cells
-  plot_cd8_pure <- ggplot(summary_cd8_pure, aes(x = orig.ident, y = proportion_CAR)) +
-    geom_bar(stat = "identity", width = 0.6, fill = "#0b81a2") +
-    scale_y_continuous(labels = scales::percent_format()) +
-    geom_text(aes(label = CAR_cells),
-              vjust = -0.5,  # Adjusts text position above bars
-              size = 3,  # Adjust text size
-              fontface = "bold") +  # Make text bold
-    ylim(0, max(100) * 1.1) +  # Increase ylim slightly to make space for labels
-    labs(
-      title = "CD8 CAR+ T cells",
-      x = "Sample",
-      y = "CAR+ cells (% of CD8 T cells)"
-    ) +
-    theme_minimal() +
-    theme(
-      legend.position = "none",
-      axis.text.x = element_text(angle = 45, hjust = 1)  # Rotate x-axis labels by 45 degrees
-    )
-
-  # Plot for pure CD4+ T cells
-  plot_cd4_pure <- ggplot(summary_cd4_pure, aes(x = orig.ident, y = proportion_CAR)) +
-    geom_bar(stat = "identity", width = 0.6, fill = "#0b81a2") +
-    scale_y_continuous(labels = scales::percent_format()) +
-    geom_text(aes(label = CAR_cells),
-              vjust = -0.5,  # Adjusts text position above bars
-              size = 3,  # Adjust text size
-              fontface = "bold") +  # Make text bold
-    ylim(0, max(100) * 1.1) +  # Increase ylim slightly to make space for labels
-    labs(
-      title = "CD4 CAR+ T cells",
-      x = "Sample",
-      y = "CAR+ cells (% of CD4 T cells)"
-    ) +
-    theme_minimal() +
-    theme(
-      legend.position = "none",
-      axis.text.x = element_text(angle = 45, hjust = 1)  # Rotate x-axis labels by 45 degrees
-    )
-
-  # Combine the two plots
-  combined_plot <- plot_cd8_pure + plot_cd4_pure + plot_layout(ncol = 2) + plot_annotation(tag_levels = 'A')
-  # Display the combined plot
-  print(combined_plot)
 }
 ```
 
@@ -413,12 +378,7 @@ if (flags$GEX){
         fill = "Cell Types"  # Change legend title
     ) +
     theme_minimal() +
-    theme(
-        axis.text.x = element_text(angle = 45, hjust = 1),
-        legend.text = element_text(size = 8),         # Reduce legend text size
-        legend.title = element_text(size = 9),        # Reduce legend title size
-        legend.key.size = unit(0.4, "cm")             # Reduce legend key size
-    )
+    theme_custom(base_size = 10)  # Apply the general theme
 
   print(stacked_bar_absolute_plot)
 }
@@ -453,12 +413,7 @@ if (flags$GEX) {
         fill = "Cell Types"  # Change legend title here
     ) +
     theme_minimal() +
-    theme(
-        axis.text.x = element_text(angle = 45, hjust = 1),
-        legend.text = element_text(size = 8),         # Reduce legend text size
-        legend.title = element_text(size = 9),        # Reduce legend title size
-        legend.key.size = unit(0.4, "cm")             # Reduce legend key size
-    )
+    theme_custom(base_size = 10)  # Apply the general theme
 
   print(stacked_bar_plot)
 }
@@ -531,7 +486,7 @@ if (flags$VDJT){
     "Large (0.01 < X <= 0.1)"       = "#F08A5D",  # Large (Orange)
     "Medium (0.001 < X <= 0.01)"    = "#A0DEFF",  # Medium (Yellowish)
     "Small (1e-04 < X <= 0.001)"    = "#5AB2FF",  # Small (Light Blue)
-    "Single"                        = "#003285"   # Single (Dark Blue),
+    "Rare (0 < X <= 1e-04)"         = "#7F7F7F"   # Single (Dark Blue),
   )
   # Create a named vector of all levels and colors
   unqiue_clonotypes_sizes <- unique(meta_data_filtered$cloneSize)
@@ -550,13 +505,7 @@ if (flags$VDJT){
       fill = "Clone size"  # Change legend title
     ) +
     theme_minimal() +
-    theme(
-        axis.text.x = element_text(angle = 45, hjust = 1),
-        legend.text = element_text(size = 8),         # Reduce legend text size
-        legend.title = element_text(size = 9),        # Reduce legend title size
-        legend.key.size = unit(0.4, "cm")             # Reduce legend key size
-    ) +
-    scale_fill_manual(values = clono.col)  # Drops unused categories from the legend
+    scale_fill_manual(values = clono.col) +  theme_custom(base_size = 10)  # Apply the general theme  # Drops unused categories from the legend
 
   print(plot_clone_size_absolute)
 }
@@ -585,19 +534,14 @@ if (flags$VDJT){
     mutate(percentage = (count / sum(count)) * 100)
 
   plot_clone_size_percentage <- ggplot(clone_size_percent, aes(x = orig.ident, y = percentage, fill = cloneSize)) +
-    geom_bar(stat = "identity", position = "fill") +  # Stacked bars with proportion scaling
+    geom_bar(stat = "identity") +  # Stacked bars with proportion scaling
     scale_y_continuous(labels = scales::percent_format(scale = 1)) +  # Convert to percentage
     scale_fill_manual(values = clono.col) +  # Use predefined colors
     labs(x = "Sample",
         y = "Percentage of Cells",
         fill = "Clone Size") +
     theme_minimal() +
-    theme(
-        axis.text.x = element_text(angle = 45, hjust = 1),
-        legend.text = element_text(size = 8),         # Reduce legend text size
-        legend.title = element_text(size = 9),        # Reduce legend title size
-        legend.key.size = unit(0.4, "cm")             # Reduce legend key size
-    ) 
+    theme_custom(base_size = 10)  # Apply the general theme
 
   print(plot_clone_size_percentage)
 }
@@ -664,14 +608,8 @@ if (flags$VDJB){
       fill = "Clone size"  # Change legend title
     ) +
     theme_minimal() +
-    theme(
-        axis.text.x = element_text(angle = 45, hjust = 1),
-        legend.text = element_text(size = 8),         # Reduce legend text size
-        legend.title = element_text(size = 9),        # Reduce legend title size
-        legend.key.size = unit(0.4, "cm")             # Reduce legend key size
-    ) +
-    scale_fill_manual(values = clono.col)  # Drops unused categories from the legend
-
+    scale_fill_manual(values = clono.col) + # Drops unused categories from the legend
+    theme_custom(base_size = 10)  # Apply the general theme
   print(plot_clone_size_absolute)
 
 }
@@ -700,19 +638,14 @@ if (flags$VDJB){
     mutate(percentage = (count / sum(count)) * 100)
 
   plot_clone_size_percentage <- ggplot(clone_size_percent, aes(x = orig.ident, y = percentage, fill = cloneSize)) +
-    geom_bar(stat = "identity", position = "fill") +  # Stacked bars with proportion scaling
+    geom_bar(stat = "identity") +  # Stacked bars with proportion scaling
     scale_y_continuous(labels = scales::percent_format(scale = 1)) +  # Convert to percentage
     scale_fill_manual(values = clono.col) +  # Use predefined colors
     labs(x = "Sample",
         y = "Percentage of Cells",
         fill = "Clone Size") +
     theme_minimal() +
-    theme(
-        axis.text.x = element_text(angle = 45, hjust = 1),
-        legend.text = element_text(size = 8),         # Reduce legend text size
-        legend.title = element_text(size = 9),        # Reduce legend title size
-        legend.key.size = unit(0.4, "cm")             # Reduce legend key size
-    )
+    theme_custom(base_size = 10)  # Apply the general theme
 
   print(plot_clone_size_percentage)
 }
