@@ -44,6 +44,7 @@ workflow {
     // Run QC
     RUN_QUALITY_CONTROL (
         safe_params.samples,
+        RUN_SECONDARY_ANALYSIS.out.cellranger_web_summary,
         params.skip_qc,
         params.skip_fastqc,
         params.skip_fastq_screen,
