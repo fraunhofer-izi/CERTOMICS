@@ -71,7 +71,7 @@ process MULTIQC {
     path config, stageAs: 'multiqc_config', arity: '1'
     path fastqc_out, stageAs: 'fastqc', arity: '0..*'
     path fastq_screen_out, stageAs: 'fastq_screen', arity: '0..*'
-    path cellranger_out, stageAs: 'cellranger_multi', arity: '0..*'
+    path cellranger_out, stageAs: 'cellranger_multi_*/web_summary.html', arity: '0..*'
 
     output:
     path 'multiqc'

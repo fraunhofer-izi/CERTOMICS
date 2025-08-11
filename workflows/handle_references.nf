@@ -44,7 +44,7 @@ process BUILD_GEX_REFERENCE {
     output:
     path "gex_reference"
 
-    shell:
+    script:
     if (ref_version == '2020') {
         template 'build_reference_2020.sh'
     } else if (ref_version == '2024') {
