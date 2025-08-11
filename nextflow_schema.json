@@ -104,6 +104,10 @@
           "type": "string",
           "description": "Backup URL of an annotation to build a gene expression reference with",
           "default": "http://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_44/gencode.v44.primary_assembly.annotation.gtf.gz"
+        },
+        "multiple_car_fa": {
+          "type": "string",
+          "description": "Optional FASTA file containing multiple CAR constructs for kallisto quantification"
         }
       }
     },

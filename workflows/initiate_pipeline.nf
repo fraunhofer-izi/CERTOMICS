@@ -78,10 +78,14 @@ workflow PARSE_PARAMETERS {
     out_gene_expression_car_gtf = null
     out_vdj_reference = null
     out_feature_reference = null
+    out_multiple_car_fa = null
 
     // overwrite defaults
     if (needs_gex) {
         // verify / check car files
+        if (params.multiple_car_fa) { // if multiple_cars are given for kallisto process
+            out_multiple_car_fa = verify_file(params.multiple_car_fa, 'multiple_car_fa')
+        }
         if (params.gene_expression_car_fa && params.gene_expression_car_gtf) {
             // both car files provided
             out_gene_expression_car_fa = verify_file(
@@ -151,6 +155,7 @@ workflow PARSE_PARAMETERS {
     gex_car_gtf = out_gene_expression_car_gtf
     vdj_reference = out_vdj_reference
     feat_reference = out_feature_reference
+    multiple_car_fa = out_multiple_car_fa
 }
 
 // <copied with small modifications from  from https://github.com/nf-core/fetchngs/blob/1.12.0/subworkflows/nf-core/utils_nfvalidation_plugin/main.nf>

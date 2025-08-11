@@ -35,7 +35,7 @@
 # - Used to indicate the presence of different data modalities:
 #   - `GEX`, `VDJ-T`, `VDJ-B`, `AntibodyCapture`.
 
-### `read_in_10x_parallel(fltrd.dirs, ADT)`
+### `read_in_10x_parallel(fltrd.dirs, ADT, raw.dirs)`
 # - Reads 10x Genomics filtered feature barcode matrices into Seurat.
 # - Supports Antibody-Derived Tags (ADT) if present.
 # - Uses `scDblFinder()` to compute doublet scores.
@@ -380,15 +380,14 @@ assign_vdj = function(obj, vdj = "vdj_t", batch = NULL, present.bool = TRUE){
 # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 # Read in 10x data GEX (and ADT)
 # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-read_in_10x_parallel <- function(fltrd.dirs, ADT){
+read_in_10x_parallel <- function(fltrd.dirs, ADT, raw.dirs){
   log_message("PROCESS: Read_in_10x_parallel.")
   bpparam = BiocParallel::MulticoreParam(workers = 16)
   seurat.l = BiocParallel::bplapply(names(fltrd.dirs), function(i) {
     id = i
-    # Read 10X data from the specified directory for the current dataset (RNA ansd ADT counts)
+    # Read 10X data from the specified directory for the current dataset (RNA and ADT counts)
     log_message(paste("Processing 10X data for:", id))
     data = Seurat::Read10X(data.dir = fltrd.dirs[names(fltrd.dirs) == id], gene.column = 2)
-
     # Create a Seurat object using the gene expression (RNA) counts, setting the project name as the dataset ID
     if (!ADT) {
       seu.obj = Seurat::CreateSeuratObject(counts = data, project = id) # if no adt
@@ -402,14 +401,25 @@ read_in_10x_parallel <- function(fltrd.dirs, ADT){
     seu.obj@meta.data$orig.ident = id
 
     # Add doublet removel scores based on scDblFinder
+    log_message("PROCESS: scDblFinder")
     sce = scDblFinder(Seurat::GetAssayData(seu.obj, assay="RNA", layer="counts"), verbose=TRUE)
     df = data.frame(sce@colData) %>% dplyr::select(scDblFinder.score, scDblFinder.class)
     colnames(df) = c("scDblFinder_score", "scDblFinder_class")
     seu.obj = Seurat::AddMetaData(seu.obj, df)
 
+    # Perform soupX
+    log_message("PROCESS: SoupX")
+    seu.obj$soup_group <- get_soup_groups(seu.obj)
+    raw_dir <- raw.dirs[[id]]
+    if (is.null(raw_dir) || !dir.exists(raw_dir)) {
+      stop(sprintf("Raw directory missing for %s: %s", id, as.character(raw_dir)))
+    }
+    seu.obj <- make_soup(seu.obj, raw_dir = raw_dir, ADT)
+
     seu.obj
   }, BPPARAM = bpparam)
-
+  
+  log_message("PROCESS: Combine Seurat.l")
   # If more than one Seurat object was created, merge them into a single Seurat object
   if(length(seurat.l) > 1) {
     se.meta = merge(
@@ -436,7 +446,6 @@ read_in_10x_parallel <- function(fltrd.dirs, ADT){
     # Set the raw counts as the data for the ADT assay (i.e., no transformations yet)
     se.meta@assays$ADT@data = se.meta@assays$ADT@counts
     rownames(se.meta@assays$ADT@meta.features) = rownames(se.meta@assays$ADT@counts)
-
     # Switch the default assay back to RNA for further processing
     DefaultAssay(se.meta) = "RNA"
   }
@@ -635,3 +644,44 @@ estimate_cc = function(se){
   })
 }
 
+get_soup_groups <- function(sobj){
+  sobj <- NormalizeData(sobj, verbose = FALSE)
+  sobj <- FindVariableFeatures(
+    object = sobj, nfeatures = 2000, verbose = FALSE, selection.method = 'vst'
+  )
+  sobj <- ScaleData(sobj, verbose = FALSE)
+  sobj <- RunPCA(sobj, npcs = 20, verbose = FALSE)
+  sobj <- FindNeighbors(sobj, dims = 1:20, verbose = FALSE)
+  sobj <- FindClusters(sobj, resolution = 0.5, verbose = FALSE)
+  return(sobj@meta.data[['seurat_clusters']])
+}
+
+make_soup <- function(sobj,raw_dir, ADT){
+  stopifnot(dir.exists(raw_dir))
+  sample_id = as.character(sobj$orig.ident[1])
+  print(sample_id)
+  print(raw_dir)
+  data = Seurat::Read10X(data.dir = raw_dir, gene.column = 2)
+  # Create a Seurat object using the gene expression (RNA) counts, setting the project name as the dataset ID
+  if (!ADT) {
+    raw = Seurat::CreateSeuratObject(counts = data, project = sample_id) # if no adt
+  } else {
+    raw = Seurat::CreateSeuratObject(counts = data[[1]], project = sample_id) # if adt
+    # Add ADT (Antibody-Derived Tag) counts as a new assay to the Seurat object
+    raw[['ADT']] = Seurat::CreateAssayObject(counts = data[[2]]) #get adt counts
+  }
+  raw_counts <- GetAssayData(raw, layer = "counts")
+  fltrd_counts <- GetAssayData(sobj, layer = "counts")
+  sc <- SoupChannel(raw_counts, fltrd_counts)
+  sc <- setClusters(sc, sobj$soup_group)
+  sc  <- autoEstCont(sc)
+  out = adjustCounts(sc, roundToInt = TRUE)
+
+  #optional keep original
+  sobj[["original.counts"]] <- CreateAssayObject(
+    counts = GetAssayData(sobj, layer = "counts")
+  )
+  sobj@assays$RNA$counts <- out
+
+  return(sobj)
+}

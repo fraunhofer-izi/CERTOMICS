@@ -15,6 +15,7 @@ execute:
   error: true
   debug: true
 params:
+  kallisto_matrix: "" #'CAR_est_counts_matrix.csv'
   results_metrics_reads_CAR: "" #"results_metrics_reads_CAR.csv" 
   results_coverage_against_CAR: "" #"results_coverage_against_CAR.csv"
   results_coverage_against_CAR_unique: "" #"results_coverage_against_CAR_unique.csv"
@@ -51,8 +52,8 @@ for (pack in list.of.packages) {
 }
 library("reticulate")
 source("helper_functions.R")
-#use_python("/homes/olymp/christina.kuhn/.conda/envs/LivingDrugOmics/bin/python3", required=TRUE)
-use_python("/usr/bin/python3", required = TRUE) 
+use_python("/homes/olymp/christina.kuhn/.conda/envs/LivingDrugOmics/bin/python3", required=TRUE)
+# use_python("/usr/bin/python3", required = TRUE) 
 ```
 
 :::{.panel-tabset .nav-pills}
@@ -186,6 +187,46 @@ def parse_binary_string(binary_string):
 flags = parse_binary_string(r.params['libraries'])
 ```
 
+
+```{python}
+#| label: plot-kallisto-metrics-across-car-constructs
+#| fig-cap: "Estimated read counts for different CAR constructs across samples, using kallisto."
+#| echo: false
+#| eval: !expr (params["gtf"] != "none")
+#| warning: false
+#| results: "hide"
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+count_df = pd.read_csv(r.params['kallisto_matrix'], index_col=0)
+
+# --- Grouped Bar Plot ---
+samples = count_df.index.tolist()
+print(samples)
+cars = count_df.columns.tolist()
+x = np.arange(len(samples))
+bar_width = 0.8 / len(cars)
+
+plt.figure(figsize=(12, 6))
+
+for i, car in enumerate(cars):
+    plt.bar(x + i * bar_width, count_df[car], width=bar_width, label=car)
+
+plt.xticks(
+    x + bar_width * (len(cars) - 1) / 2,
+    samples,
+    rotation=45,
+    ha='right')
+plt.xlabel("Sample")
+plt.ylabel("Estimated Read Counts")
+plt.title("CAR Read Counts per Sample")
+plt.legend(title="CAR")
+plt.tight_layout()
+plt.show()
+
+```
+
 ```{python}
 #| label: coverage-plot
 #| fig-cap: "Read coverage across the CAR construct is given. The x-axis presents nucleotide position within the CAR construct, while the y-axis shows the number of reads mapping to each nucleotide position. Coverage is depicted for two categories: uniquely mapped reads (in blue) and all mapped reads (in purple), which include both uniquely and multimapped reads, as determined by the STAR aligner."
@@ -224,8 +265,8 @@ if flags["GEX"]:
 ## Count-level
 
 ```{r}
-#| label: count-level-plots
-#| fig-cap: "Percentage of CAR-positive cells (count>0) compared to all T cells (CD4, CD8, gd) (based on scGate annotation). Absolute counts of CD4 and CD8 CAR+ T cells are displayed on top of the bars."
+#| label: count-level-plots-t
+#| fig-cap: "Percentage of CAR-positive cells (count>0) compared to all T cells (CD4, CD8, gdT, multi) (based on scGate annotation). Absolute counts of are displayed on top of the bars (frequency under 1% are not labeled)."
 #| echo: false
 #| warning: false
 #| eval: !expr (params$gtf != "none")
@@ -267,9 +308,10 @@ if (flags$GEX && params$gtf != "none" && !is.null(meta_data)){
   car_t_cells <- t_cell_data %>%
     filter(T_CAR == TRUE) %>%
     mutate(T_cell_type = case_when(
-      is.pure_CD4T == "Pure" ~ "CD4",
-      is.pure_CD8T == "Pure" ~ "CD8",
-      TRUE ~ NA_character_
+      scGate_multi == "CD4T" ~ "CD4",
+      scGate_multi == "CD8T" ~ "CD8",
+      scGate_multi == "gdT" ~ "gdT",
+      TRUE ~ "Multi"
     )) %>%
     filter(!is.na(T_cell_type)) %>%
     group_by(orig.ident, T_cell_type) %>%
@@ -281,24 +323,34 @@ if (flags$GEX && params$gtf != "none" && !is.null(meta_data)){
     mutate(percentage = (CAR_count / total_T) * 100)
 
   car_percent <- car_percent %>%
-  mutate(
-    text_color = ifelse(T_cell_type == "CD4", "black", "white")
-  )
-
+    mutate(
+      text_color = case_when(
+        T_cell_type %in% c("CD4", "gdT", "Multi") ~ "black",
+        TRUE ~ "white"
+      )
+    )
+  car_percent <- car_percent %>%
+  mutate(show_label = ifelse(percentage <= 1, NA, CAR_count))
   # Step 5: Create stacked barplot
   plot_car_proportion <- ggplot(car_percent, aes(x = orig.ident, y = percentage, fill = T_cell_type)) +
     geom_bar(stat = "identity") +
     geom_text(
-      aes(label = CAR_count, color = text_color),
+      aes(label = show_label, color = text_color),
       position = position_stack(vjust = 0.5),
       size = 3,
       fontface = "bold"
     ) +
     scale_fill_manual(
-      values = c("CD4" = "#6FC1CD", "CD8" = "#005B7F")
+      values = c(
+        "CD4" = "#6FC1CD",
+        "CD8" = "#005B7F",
+        "gdT" = "#FF7F00",
+        "Multi" = "grey"
+      )
     ) +
     scale_color_identity(guide = "none") +  # Directly uses the color value without legend
     labs(
+      title = "CAR+ T Cells",
       x = "Sample",
       y = "CAR+ Cells (% of all T cells)",
       fill = "T cell type"
@@ -307,11 +359,201 @@ if (flags$GEX && params$gtf != "none" && !is.null(meta_data)){
     theme_minimal() +
     theme(axis.text.x = element_text(angle = 45, hjust = 1)) +  theme_custom(base_size = 10)  # Apply the general theme
 
-
-
+  ggsave("test.png",plot_car_proportion)
   print(plot_car_proportion)
 }
 ```
+
+
+```{r}
+#| label: count-level-plots-nk
+#| fig-cap: "Percentage of CAR-positive cells (count>0) compared to all NK cells (based on scGate annotation). Absolute counts of are displayed on top of the bars."
+#| echo: false
+#| warning: false
+#| eval: !expr (params$gtf != "none")
+#| fig-height: 4
+
+if (flags$GEX && params$gtf != "none" && !is.null(meta_data)){
+  # Step 1: Filter for pure T cells
+  nk_cell_data <- meta_data %>%
+    filter(is.pure_NK == "Pure")
+
+  # Summarize per sample
+  nk_summary <- nk_cell_data %>%
+    group_by(orig.ident) %>%
+    summarise(
+      total_nk = n(),
+      car_pos_nk = sum(CAR_BY_EXPRS == TRUE),
+      car_pos_fraction = car_pos_nk / total_nk,
+      car_pos_percent = 100 * car_pos_fraction
+    )
+
+  # Step 5: Create stacked barplot
+  plot_nk_car_percent <- ggplot(nk_summary, aes(x = orig.ident, y = car_pos_percent)) +
+  geom_bar(stat = "identity", fill = "lightgrey") +
+  geom_text(
+    aes(label = car_pos_nk),
+    vjust = -0.3,
+    size = 3,
+    fontface = "bold"
+  ) +
+  scale_y_continuous(limits = c(0, 100), expand = c(0, 0)) +
+  labs(
+    title = "CAR+ NK Cells",
+    x = "Sample",
+    y = "CAR+ NK Cells (% of all NK cells)"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme_custom(base_size = 10)
+
+  print(plot_nk_car_percent)
+}
+
+```
+
+```{r}
+#| label: count-level-plots-macro
+#| fig-cap: "Percentage of CAR-positive cells (count>0) compared to all Macrophages (based on scGate annotation). Absolute counts of are displayed on top of the bars."
+#| echo: false
+#| warning: false
+#| eval: !expr (params$gtf != "none")
+#| fig-height: 4
+
+if (flags$GEX && params$gtf != "none" && !is.null(meta_data)){
+  # Step 1: Filter for pure T cells
+  m_cell_data <- meta_data %>%
+    filter(is.pure_Monocyte == "Pure")
+
+  # Summarize per sample
+  m_summary <- m_cell_data %>%
+    group_by(orig.ident) %>%
+    summarise(
+      total_m = n(),
+      car_pos_m = sum(CAR_BY_EXPRS == TRUE),
+      car_pos_fraction = car_pos_m / total_m,
+      car_pos_percent = 100 * car_pos_fraction
+    )
+
+  # Step 5: Create stacked barplot
+  plot_m_car_percent <- ggplot(m_summary, aes(x = orig.ident, y = car_pos_percent)) +
+  geom_bar(stat = "identity", fill = "#A6D854") +
+  geom_text(
+    aes(label = car_pos_m),
+    vjust = -0.3,
+    size = 3,
+    fontface = "bold"
+  ) +
+  scale_y_continuous(limits = c(0, 100), expand = c(0, 0)) +
+  labs(
+    title = "CAR+ Macrophages",
+    x = "Sample",
+    y = "CAR+ Macrophages (% of all Macrophages cells)"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme_custom(base_size = 10)
+
+  print(plot_m_car_percent)
+}
+
+```
+
+
+```{r}
+#| label: count-level-plots-Dc
+#| fig-cap: "Percentage of CAR-positive cells (count>0) compared to all Dendritic Cells (based on scGate annotation). Absolute counts of are displayed on top of the bars."
+#| echo: false
+#| warning: false
+#| eval: !expr (params$gtf != "none")
+#| fig-height: 4
+
+if (flags$GEX && params$gtf != "none" && !is.null(meta_data)){
+  # Step 1: Filter for pure T cells
+  m_cell_data <- meta_data %>%
+    filter(is.pure_panDC == "Pure")
+  # Summarize per sample
+  m_summary <- m_cell_data %>%
+    group_by(orig.ident) %>%
+    summarise(
+      total_m = n(),
+      car_pos_m = sum(CAR_BY_EXPRS == TRUE),
+      car_pos_fraction = car_pos_m / total_m,
+      car_pos_percent = 100 * car_pos_fraction
+    )
+
+  # Step 5: Create stacked barplot
+  plot_m_car_percent <- ggplot(m_summary, aes(x = orig.ident, y = car_pos_percent)) +
+  geom_bar(stat = "identity", fill = "#33A02C") +
+  geom_text(
+    aes(label = car_pos_m),
+    vjust = -0.3,
+    size = 3,
+    fontface = "bold"
+  ) +
+  scale_y_continuous(limits = c(0, 100), expand = c(0, 0)) +
+  labs(
+    title = "CAR+ Dendritic Cells",
+    x = "Sample",
+    y = "CAR+ Dendritic Cells (% of all Dentritic cells)"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme_custom(base_size = 10)
+
+  print(plot_m_car_percent)
+}
+
+```
+
+
+```{r}
+#| label: count-level-plots-b
+#| fig-cap: "Percentage of CAR-positive cells (count>0) compared to all B cells (based on scGate annotation). Absolute counts of are displayed on top of the bars."
+#| echo: false
+#| warning: false
+#| eval: !expr (params$gtf != "none")
+#| fig-height: 4
+
+if (flags$GEX && params$gtf != "none" && !is.null(meta_data)){
+  # Step 1: Filter for pure T cells
+  m_cell_data <- meta_data %>%
+    filter(is.pure_Bcell == "Pure")
+
+  # Summarize per sample
+  m_summary <- m_cell_data %>%
+    group_by(orig.ident) %>%
+    summarise(
+      total_m = n(),
+      car_pos_m = sum(CAR_BY_EXPRS == TRUE),
+      car_pos_fraction = car_pos_m / total_m,
+      car_pos_percent = 100 * car_pos_fraction
+    )
+
+  # Step 5: Create stacked barplot
+  plot_m_car_percent <- ggplot(m_summary, aes(x = orig.ident, y = car_pos_percent)) +
+  geom_bar(stat = "identity", fill = "#F8766D") +
+  geom_text(
+    aes(label = car_pos_m),
+    vjust = -0.3,
+    size = 3,
+    fontface = "bold"
+  ) +
+  scale_y_continuous(limits = c(0, 100), expand = c(0, 0)) +
+  labs(
+    title = "CAR+ B Cells",
+    x = "Sample",
+    y = "CAR+ B Cells (% of all B cells)"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme_custom(base_size = 10)
+
+  print(plot_m_car_percent)
+}
+
+```
+
 
 # GEX-specific metrices
 
