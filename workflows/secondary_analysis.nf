@@ -147,11 +147,12 @@ process SEURAT_OBJECT {
     script:
     library_types = get_library_types(samples.collect { sample -> sample.libraries }.flatten() )
     add_matrices = library_types[0] || library_types[3]
+    add_raw_matrices = library_types[0] 
     add_annotation_b = library_types[1]
     add_annotation_t = library_types[2]
 
     matrices = add_matrices ? feature_bc_matrices.join(',') : 'none'
-    matrices_raw = add matrices ? feature_raw_bc_matrix.join(',') : 'none'
+    matrices_raw = add_raw_matrices ? feature_raw_bc_matrix.join(',') : 'none'
     annotation_t = add_annotation_t ? vdj_t_annotations.join(',') : 'none'
     annotation_b = add_annotation_b ? vdj_b_annotations.join(',') : 'none'
 
@@ -312,16 +313,12 @@ workflow RUN_SECONDARY_ANALYSIS {
     )
 
     do_sub_workflow = (car_fa.value && car_gtf.value)
-    kallisto_results = Channel.empty()
     if (multiple_car_fa.value) {
-        kallisto_index_ch = KALLISTO_INDEX(multiple_car_fa)
-        kallisto_results = KALLISTO_QUANT(
-            kallisto_index_ch, 
+        KALLISTO_INDEX(multiple_car_fa)
+        KALLISTO_QUANT(
+            KALLISTO_INDEX.out, 
             samples.map { sample -> sample.libraries.collect { library -> library.path } },
             samples.map { sample -> sample.name })
-        kallisto_results
-            .collect()
-            .set { all_kallisto_dirs }
     }
 
     if (do_sub_workflow) {
@@ -341,7 +338,7 @@ workflow RUN_SECONDARY_ANALYSIS {
             car_fa,
             car_gtf,
             samples.collect(),
-            kallisto_results
+            multiple_car_fa.value ? KALLISTO_QUANT.out.collect() : []
         )
 
         QUARTO (

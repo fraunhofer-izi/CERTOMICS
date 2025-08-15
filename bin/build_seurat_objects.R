@@ -155,7 +155,7 @@ if (!any(unlist(flags))){
 }
 
 # Load and Process Data
-se.meta <- read_in_10x_parallel(cellranger_dirs, flags$AntibodyCapture, cellranger_dirs_raw)
+se.meta <- read_in_10x_parallel(cellranger_dirs_filt, flags$AntibodyCapture, cellranger_dirs_raw)
 se.meta <- normalization_seurat(se.meta, flags$AntibodyCapture)
 se.meta <- data_quality_mito_ribo_complexity(se.meta)
 se.meta <- add_low_quality_info(se.meta)

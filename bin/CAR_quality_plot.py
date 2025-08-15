@@ -203,7 +203,7 @@ def interactive_coverage_plot(samples, cov_all, cov_unique, gtf_path_car, output
             arrowhead=2,
             ax=0,
             ay=-40,
-            font=dict(size=10),
+            font=dict(size=13),
             textangle=-45
         )
 
@@ -265,12 +265,7 @@ def interactive_coverage_plot(samples, cov_all, cov_unique, gtf_path_car, output
     # Add x-axis title only to bottom subplot
     num_rows = len(samples) + 1
     fig.update_xaxes(title_text="Genomic Position", row=num_rows, col=1)
-
-    # # Save the plot as an image using Kaleido
-    # import plotly.io as pio
-    # pio.write_image(fig, "coverage_plot.png", format="png", scale=3)
-
-    fig.write_html("coverage_plot.html")  # saved to current working directory
+    # fig.write_html("coverage_plot.html")  # saved to current working directory
     return fig
 
 
@@ -356,7 +351,7 @@ def bar_plot(read_metrics, samples):
     ax.set_xticklabels(samples, rotation=45, fontsize=24)
     ax.set_xlabel('Sample', fontsize=24)
     ax.set_ylabel('Reads (abs.)', fontsize=24)
-    ax.tick_params(axis='y', labelsize=24)  # <-- This line adjusts only y-axis ticks
+    ax.tick_params(axis='y', labelsize=24) 
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 

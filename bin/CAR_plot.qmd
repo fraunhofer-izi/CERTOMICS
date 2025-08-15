@@ -52,8 +52,8 @@ for (pack in list.of.packages) {
 }
 library("reticulate")
 source("helper_functions.R")
-use_python("/homes/olymp/christina.kuhn/.conda/envs/LivingDrugOmics/bin/python3", required=TRUE)
-# use_python("/usr/bin/python3", required = TRUE) 
+#use_python("/homes/olymp/christina.kuhn/.conda/envs/LivingDrugOmics/bin/python3", required=TRUE)
+use_python("/usr/bin/python3", required = TRUE) 
 ```
 
 :::{.panel-tabset .nav-pills}
@@ -192,7 +192,7 @@ flags = parse_binary_string(r.params['libraries'])
 #| label: plot-kallisto-metrics-across-car-constructs
 #| fig-cap: "Estimated read counts for different CAR constructs across samples, using kallisto."
 #| echo: false
-#| eval: !expr (params["gtf"] != "none")
+#| eval: !expr (params$kallisto_matrix != "" && file.exists(params$kallisto_matrix))
 #| warning: false
 #| results: "hide"
 
@@ -213,15 +213,25 @@ plt.figure(figsize=(12, 6))
 for i, car in enumerate(cars):
     plt.bar(x + i * bar_width, count_df[car], width=bar_width, label=car)
 
-plt.xticks(
-    x + bar_width * (len(cars) - 1) / 2,
-    samples,
-    rotation=45,
-    ha='right')
-plt.xlabel("Sample")
-plt.ylabel("Estimated Read Counts")
-plt.title("CAR Read Counts per Sample")
-plt.legend(title="CAR")
+# Centered xticks for grouped bars
+ax.set_xticks(x + bar_width * (len(cars) - 1) / 2)
+ax.set_xticklabels(samples, rotation=45, fontsize=24)
+
+# Axis labels & title with larger font
+ax.set_xlabel("Sample", fontsize=24)
+ax.set_ylabel("Estimated Read Counts", fontsize=24)
+ax.set_title("CAR Read Counts per Sample", fontsize=26)
+
+# Increase tick label sizes
+ax.tick_params(axis='y', labelsize=24)
+
+# Hide top and right spines only
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
+
+# Legend with bigger font
+ax.legend(title="CAR", fontsize=20, title_fontsize=20)
+
 plt.tight_layout()
 plt.show()
 
