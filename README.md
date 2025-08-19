@@ -6,7 +6,7 @@ For further information and installation guidelines go to our [Website](TODO)
 
 <img alt="Abb_CAR_T_cell_profiling_V2"
      src="https://github.com/user-attachments/assets/10ca92b2-f839-4e82-a89e-66ad7e346924"
-     width="2008" />
+     width="50%" />
 
 # Contacts
 
