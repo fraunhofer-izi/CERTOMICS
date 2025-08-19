@@ -52,8 +52,8 @@ for (pack in list.of.packages) {
 }
 library("reticulate")
 source("helper_functions.R")
-#use_python("/homes/olymp/christina.kuhn/.conda/envs/LivingDrugOmics/bin/python3", required=TRUE)
-use_python("/usr/bin/python3", required = TRUE) 
+use_python("/homes/olymp/christina.kuhn/.conda/envs/LivingDrugOmics/bin/python3", required=TRUE)
+# use_python("/usr/bin/python3", required = TRUE) 
 ```
 
 :::{.panel-tabset .nav-pills}
@@ -203,34 +203,33 @@ count_df = pd.read_csv(r.params['kallisto_matrix'], index_col=0)
 
 # --- Grouped Bar Plot ---
 samples = count_df.index.tolist()
-print(samples)
 cars = count_df.columns.tolist()
 x = np.arange(len(samples))
 bar_width = 0.8 / len(cars)
 
-plt.figure(figsize=(12, 6))
+fig, ax = plt.subplots(figsize=(14, 6))
 
 for i, car in enumerate(cars):
-    plt.bar(x + i * bar_width, count_df[car], width=bar_width, label=car)
+    ax.bar(x + i * bar_width, count_df[car], width=bar_width, label=car)
 
 # Centered xticks for grouped bars
 ax.set_xticks(x + bar_width * (len(cars) - 1) / 2)
-ax.set_xticklabels(samples, rotation=45, fontsize=24)
+ax.set_xticklabels(samples, rotation=45, fontsize=14)
 
 # Axis labels & title with larger font
-ax.set_xlabel("Sample", fontsize=24)
-ax.set_ylabel("Estimated Read Counts", fontsize=24)
-ax.set_title("CAR Read Counts per Sample", fontsize=26)
+ax.set_xlabel("Sample", fontsize=16)
+ax.set_ylabel("Estimated Read Counts", fontsize=16)
+ax.set_title("CAR Read Counts per Sample", fontsize=18)
 
 # Increase tick label sizes
-ax.tick_params(axis='y', labelsize=24)
+ax.tick_params(axis='y', labelsize=12)
 
 # Hide top and right spines only
 ax.spines['top'].set_visible(False)
 ax.spines['right'].set_visible(False)
 
 # Legend with bigger font
-ax.legend(title="CAR", fontsize=20, title_fontsize=20)
+ax.legend(title="CAR", fontsize=12, title_fontsize=14)
 
 plt.tight_layout()
 plt.show()
