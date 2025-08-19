@@ -4,7 +4,9 @@ CERTOMICS is a Nextflow-based pipeline tailored for single-cell multiomics profi
 
 For further information and installation guidelines go to our [Website](TODO)
 
-<img width="4016" height="5765" alt="Abb_CAR_T_cell_profiling_V2" src="https://github.com/user-attachments/assets/10ca92b2-f839-4e82-a89e-66ad7e346924" />
+<img alt="Abb_CAR_T_cell_profiling_V2"
+     src="https://github.com/user-attachments/assets/10ca92b2-f839-4e82-a89e-66ad7e346924"
+     width="2008" />
 
 # Contacts
 
