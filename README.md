@@ -1,6 +1,6 @@
 # CERTOMICS
 
-CERTOMICS is a Nextflow-based pipeline offering enhanced **cert**ainty in immunophenotyping and data interpretation, tailored for single-cell multi**omics** profiling of adoptive cellular immunotherapies. The pipeline standardises processing 10x Genomics single-cell multiomics data and integrates CAR-specific identification and quality control. Additionally, a curated repository of CAR construct sequences and annotation data is provided, serving as a resource to support the analysis and development of CAR T cell therapies.
+CERTOMICS is a Nextflow-based pipeline offering enhanced **CERT**ainty in immunophenotyping and data interpretation, tailored for single-cell multi**OMICS** profiling of adoptive cellular immunotherapies. The pipeline standardises processing 10x Genomics single-cell multiomics data and integrates CAR-specific identification and quality control. Additionally, a curated repository of CAR construct sequences and annotation data is provided, serving as a resource to support the analysis and development of CAR T cell therapies.
 
 For further information and **installation guidelines** go to our [Website](TODO)
 
