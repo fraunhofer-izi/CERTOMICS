@@ -5,8 +5,9 @@ CERTOMICS is a Nextflow-based pipeline offering enhanced **CERT**ainty in immuno
 For further information and **installation guidelines** go to our [Website](TODO)
 
 <img alt="Abb_CAR_T_cell_profiling_V2"
-     src="https://github.com/user-attachments/assets/10ca92b2-f839-4e82-a89e-66ad7e346924"
+     src="https://github.com/user-attachments/assets/b49a424e-befc-47e0-a568-9c2523691c0c"
      width="50%" />
+
 
 # Contacts
 
