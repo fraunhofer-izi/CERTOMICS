@@ -185,14 +185,14 @@ process CAR_METRICS {
     path 'results_metrics_reads_CAR.csv', emit: metrics
     path 'results_coverage_against_CAR.csv', emit: coverage
     path 'results_coverage_against_CAR_unique.csv', emit: coverage_unique
-    path "CAR_est_counts_matrix.csv", emit: kallisto_matrix
+    path "CAR_est_counts_matrix.csv", optional: true, emit: kallisto_matrix
 
     script:
     def kallisto_cmd = quant_dirs ? """
     Kallisto_Comparisons.py \\
         --input-dir ${quant_dirs.join(' ')} \\
         --output CAR_est_counts_matrix.csv
-    """ : "touch CAR_est_counts_matrix.csv"
+    """ : ""
 
     """
     CAR_quality.py \
@@ -261,6 +261,7 @@ process KALLISTO_INDEX {
 
 process KALLISTO_QUANT {
     label 'module_kallisto'
+    fair true
 
     input:
     path index_file

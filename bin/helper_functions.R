@@ -481,8 +481,8 @@ annotation_exr_and_scgate <- function(se.meta, car_construct){
   }
   # Annotate with scGATE (based on normalized counts)
   scGate_models_DB <- get_scGateDB()
-  PBMC_model <- scGate_models_DB$human$PBMC
-  se.meta_annotated <- scGate(se.meta, model = PBMC_model, save.levels = FALSE, multi.asNA = FALSE)
+  current_model <-  scGate_models_DB$human$PBMC
+  se.meta_annotated <- scGate(se.meta, model = current_model, save.levels = FALSE, multi.asNA = FALSE)
   #annotate T cells with and without
   if (!is.null(car_construct)){
     se.meta_annotated$T_CAR <- ifelse(

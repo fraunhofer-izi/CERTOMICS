@@ -285,7 +285,7 @@ def main():
     args = parse_arguments()
     bams, CAR_fasta, CAR_anno = load_data(args.bam_files, args.CAR_fasta_file, args.CAR_gtf_file)
     print("Data loaded.")
-    print("samples:", args.sample_names)
+    print("Samples:", args.sample_names)
     print("CAR fasta:", CAR_fasta)
     print("CAR anno:", CAR_anno)
     generate_quality_metrics(bams, args.sample_names, CAR_anno)

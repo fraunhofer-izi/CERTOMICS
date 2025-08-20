@@ -254,18 +254,18 @@ def interactive_coverage_plot(samples, cov_all, cov_unique, gtf_path_car, output
         legend=dict(
             orientation="h",
             yanchor="top",
-            y=1.20,        # aligned with bottom edge of plot
+            y=1.30,        # aligned with bottom edge of plot
             xanchor="center",
             x=0.5
         ),
-        margin=dict(t=100, b=20, l=50, r=10)
+        margin=dict(t=120, b=20, l=50, r=10)
     )
     fig.update_yaxes(showgrid=False)
     fig.update_xaxes(showgrid=False)
     # Add x-axis title only to bottom subplot
     num_rows = len(samples) + 1
     fig.update_xaxes(title_text="Genomic Position", row=num_rows, col=1)
-    # fig.write_html("coverage_plot.html")  # saved to current working directory
+    fig.write_html("coverage_plot.html")  # saved to current working directory
     return fig
 
 
@@ -343,7 +343,7 @@ def bar_plot(read_metrics, samples):
             bar_patch.get_x() + bar_patch.get_width() / 2,  # X position
             bar_patch.get_height() + 5,  # Y position (slightly above the bar)
             str(value),  # Text to display
-            ha='center', va='bottom', fontsize=20  # Alignment and font size
+            ha='center', va='bottom', fontsize=22  # Alignment and font size
         )
 
     # Formatting the plot
@@ -351,7 +351,7 @@ def bar_plot(read_metrics, samples):
     ax.set_xticklabels(samples, rotation=45, fontsize=24)
     ax.set_xlabel('Sample', fontsize=24)
     ax.set_ylabel('Reads (abs.)', fontsize=24)
-    ax.tick_params(axis='y', labelsize=24) 
+    ax.tick_params(axis='y', labelsize=24)
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 

@@ -52,8 +52,7 @@ for (pack in list.of.packages) {
 }
 library("reticulate")
 source("helper_functions.R")
-use_python("/homes/olymp/christina.kuhn/.conda/envs/LivingDrugOmics/bin/python3", required=TRUE)
-# use_python("/usr/bin/python3", required = TRUE) 
+use_python("/usr/bin/python3", required = TRUE) 
 ```
 
 :::{.panel-tabset .nav-pills}
@@ -214,22 +213,21 @@ for i, car in enumerate(cars):
 
 # Centered xticks for grouped bars
 ax.set_xticks(x + bar_width * (len(cars) - 1) / 2)
-ax.set_xticklabels(samples, rotation=45, fontsize=14)
+ax.set_xticklabels(samples, rotation=45, fontsize=18)
 
 # Axis labels & title with larger font
-ax.set_xlabel("Sample", fontsize=16)
-ax.set_ylabel("Estimated Read Counts", fontsize=16)
-ax.set_title("CAR Read Counts per Sample", fontsize=18)
+ax.set_xlabel("Sample", fontsize=20)
+ax.set_ylabel("Estimated Read Counts", fontsize=20)
 
 # Increase tick label sizes
-ax.tick_params(axis='y', labelsize=12)
+ax.tick_params(axis='y', labelsize=18)
 
 # Hide top and right spines only
 ax.spines['top'].set_visible(False)
 ax.spines['right'].set_visible(False)
 
 # Legend with bigger font
-ax.legend(title="CAR", fontsize=12, title_fontsize=14)
+ax.legend(title="CAR", fontsize=14, title_fontsize=16, framealpha=0.7)
 
 plt.tight_layout()
 plt.show()
