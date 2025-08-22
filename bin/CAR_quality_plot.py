@@ -108,6 +108,7 @@ def plot_coverage(cov_all, cov_unique, gtf_path_car):
 def interactive_coverage_plot(samples, cov_all, cov_unique, gtf_path_car, output_html="interactive_coverage.html"):
     # === Parse GTF for exon features ===
     exon_features = []
+    FONT = 12  # one place to control every text size
     max_end = 0
     with open(gtf_path_car, encoding="utf-8") as f:
         for line in f:
@@ -203,8 +204,7 @@ def interactive_coverage_plot(samples, cov_all, cov_unique, gtf_path_car, output
             arrowhead=2,
             ax=0,
             ay=-40,
-            font=dict(size=13),
-            textangle=-45
+            textangle=-30
         )
 
     # === Add coverage plots ===
@@ -239,12 +239,11 @@ def interactive_coverage_plot(samples, cov_all, cov_unique, gtf_path_car, output
         fig.add_annotation(
             xref="paper",
             yref=f'y{row} domain',
-            x=-0.055,
+            x=-0.095,
             y=0.5,
             text=sample,
             textangle=-90,
             showarrow=False,
-            font=dict(size=13, color="black"),
             xanchor="center"
         )
 
@@ -256,12 +255,17 @@ def interactive_coverage_plot(samples, cov_all, cov_unique, gtf_path_car, output
             yanchor="top",
             y=1.30,        # aligned with bottom edge of plot
             xanchor="center",
-            x=0.5
+            x=0.5,
+            font=dict(size=FONT),
+            title_font=dict(size=FONT)
         ),
-        margin=dict(t=120, b=20, l=50, r=10)
+        font=dict(size=FONT),                   # defaults (titles, ticks, legend, etc.)
+        hoverlabel=dict(font_size=FONT),
+        title_font_size=FONT,
+        margin=dict(t=120, b=20, l=80, r=10)
     )
-    fig.update_yaxes(showgrid=False)
-    fig.update_xaxes(showgrid=False)
+    fig.update_xaxes(title_font=dict(size=FONT), tickfont=dict(size=FONT),showgrid=False)
+    fig.update_yaxes(title_font=dict(size=FONT), tickfont=dict(size=FONT),showgrid=False)
     # Add x-axis title only to bottom subplot
     num_rows = len(samples) + 1
     fig.update_xaxes(title_text="Genomic Position", row=num_rows, col=1)
@@ -332,7 +336,7 @@ def bar_plot(read_metrics, samples):
     absolute_reads = [int(value['absolute_reads']) for value in read_metrics.values()]
 
     # Create the plot
-    _, ax = plt.subplots(figsize=(20, 10))
+    _, ax = plt.subplots(figsize=(14, 6))
 
     # Bar plot for absolute reads
     bars = ax.bar(samples, absolute_reads, color='#7e4794', label='Absolute Reads')
@@ -343,15 +347,15 @@ def bar_plot(read_metrics, samples):
             bar_patch.get_x() + bar_patch.get_width() / 2,  # X position
             bar_patch.get_height() + 5,  # Y position (slightly above the bar)
             str(value),  # Text to display
-            ha='center', va='bottom', fontsize=22  # Alignment and font size
+            ha='center', va='bottom', fontsize=16  # Alignment and font size
         )
 
     # Formatting the plot
     ax.set_xticks(range(len(samples)))
-    ax.set_xticklabels(samples, rotation=45, fontsize=24)
-    ax.set_xlabel('Sample', fontsize=24)
-    ax.set_ylabel('Reads (abs.)', fontsize=24)
-    ax.tick_params(axis='y', labelsize=24)
+    ax.set_xticklabels(samples, rotation=45, fontsize=16)
+    ax.set_xlabel('Sample', fontsize=16)
+    ax.set_ylabel('Reads (abs.)', fontsize=16)
+    ax.tick_params(axis='y', labelsize=16)
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 

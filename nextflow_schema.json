@@ -108,6 +108,12 @@
         "multiple_car_fa": {
           "type": "string",
           "description": "Optional FASTA file containing multiple CAR constructs for kallisto quantification"
+        },
+        "scGate_model": {
+          "type": "string",
+          "description": "ScGate model used for annotation of gene expression data. Must be PBMC or TME_HiRes.",
+          "enum": ["PBMC", "TME_HiRes"],
+          "default": "PBMC"
         }
       }
     },

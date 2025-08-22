@@ -39,7 +39,8 @@ workflow {
         safe_params.feat_reference,
         safe_params.gex_car_fa,
         safe_params.gex_car_gtf,
-        safe_params.multiple_car_fa
+        safe_params.multiple_car_fa,
+        safe_params.scGate_model
     )
 
     // Run QC

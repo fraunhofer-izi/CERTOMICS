@@ -18,7 +18,7 @@ Emails:
 - David.Schmidt@izi.fraunhofer.de
 
 
-# LivingDrugOmics/
+# CERTOMICS/
 ├── main.nf                      # Main Nextflow entrypoint
 ├── nextflow.config              # Config file
 |── nextflow_schema.json         # Nextflow schema for validation

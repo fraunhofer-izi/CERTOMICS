@@ -140,6 +140,7 @@ process SEURAT_OBJECT {
     path vdj_b_annotations, stageAs: 'vdj_b_annotation', arity: '1..*'
     path annotation, stageAs: 'annotation.gtf', arity: '1'
     val samples
+    val scGate_model
 
     output:
     path 'seurat_object.rds'
@@ -166,7 +167,8 @@ process SEURAT_OBJECT {
         ${samples.collect { sample -> "\"${sample.name}\"" }.join(',')} \
         "seurat_object.rds" \
         "${get_sample_list_type_bits(samples)}" \
-        "${annotation}"
+        "${annotation}" \
+        "${scGate_model}"
     """
 }
 
@@ -302,6 +304,7 @@ workflow RUN_SECONDARY_ANALYSIS {
     car_fa
     car_gtf
     multiple_car_fa // for kallisto indexing & quantification
+    scGate_model
 
     main:
     CELLRANGER_MULTI (
@@ -330,7 +333,8 @@ workflow RUN_SECONDARY_ANALYSIS {
             CELLRANGER_MULTI.out.vdj_t_annotations.collect(),
             CELLRANGER_MULTI.out.vdj_b_annotations.collect(),
             car_gtf,
-            samples.collect()
+            samples.collect(),
+            scGate_model
         )
 
         CAR_METRICS (

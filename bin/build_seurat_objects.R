@@ -95,6 +95,7 @@ tryCatch({
   seurat_output        <- args[7]
   type_bits            <- args[8]
   gtf_path             <- args[9]
+  scGate_model         <- args[10]
 
   flags <- parse_binary_string(type_bits)
   #Position 1: GEX (Gene Expression)
@@ -147,6 +148,17 @@ names(cellranger_dirs_raw)  <- cellranger_samples
 if (any(cellranger_vdjt != "none")) names(cellranger_vdjt) <- cellranger_samples
 if (any(cellranger_vdjb != "none")) names(cellranger_vdjb) <- cellranger_samples
 
+# Validate scGate_model
+allowed_models <- c("PBMC", "TME_HiRes")
+if (!(scGate_model %in% allowed_models)) {
+  stop(paste0(
+    "Invalid scGate_model: ", scGate_model,
+    ". Must be one of: ", paste(allowed_models, collapse = ", ")
+  ))
+} else {
+  log_message(paste("Using scGate_model:", scGate_model))
+}
+
 # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 # Load Rawcounts and create a merged Seurat object accoring to library used
 # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -160,7 +172,7 @@ se.meta <- normalization_seurat(se.meta, flags$AntibodyCapture)
 se.meta <- data_quality_mito_ribo_complexity(se.meta)
 se.meta <- add_low_quality_info(se.meta)
 se.meta <- cell_cycle_scores(se.meta)
-se.meta <- annotation_exr_and_scgate(se.meta, car_construct)
+se.meta <- annotation_exr_and_scgate(se.meta, car_construct, scGate_model)
 
 if (flags$VDJT && flags$VDJB) {
   se.meta <- assign_both_vdj(obj = se.meta, batch_vdj = cellranger_vdjt, batch_vdb = cellranger_vdjb, TRUE)

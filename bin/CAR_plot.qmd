@@ -1,7 +1,7 @@
 ---
 title: "Quality Control"
 author: "Fraunhofer IZI"
-subtitle: "LivingDrugOmics v1.0"
+subtitle: "CERTOMICS v1.0"
 date: today
 format:
   html:
@@ -52,7 +52,8 @@ for (pack in list.of.packages) {
 }
 library("reticulate")
 source("helper_functions.R")
-use_python("/usr/bin/python3", required = TRUE) 
+use_python("/homes/olymp/christina.kuhn/.conda/envs/LivingDrugOmics/bin/python3", required=TRUE)
+# use_python("/usr/bin/python3", required = TRUE) 
 ```
 
 :::{.panel-tabset .nav-pills}
@@ -213,21 +214,21 @@ for i, car in enumerate(cars):
 
 # Centered xticks for grouped bars
 ax.set_xticks(x + bar_width * (len(cars) - 1) / 2)
-ax.set_xticklabels(samples, rotation=45, fontsize=18)
+ax.set_xticklabels(samples, rotation=45, fontsize=16)
 
 # Axis labels & title with larger font
-ax.set_xlabel("Sample", fontsize=20)
-ax.set_ylabel("Estimated Read Counts", fontsize=20)
+ax.set_xlabel("Sample", fontsize24)
+ax.set_ylabel("Estimated Read Counts", fontsize=16)
 
 # Increase tick label sizes
-ax.tick_params(axis='y', labelsize=18)
+ax.tick_params(axis='y', labelsize=16)
 
 # Hide top and right spines only
 ax.spines['top'].set_visible(False)
 ax.spines['right'].set_visible(False)
 
 # Legend with bigger font
-ax.legend(title="CAR", fontsize=14, title_fontsize=16, framealpha=0.7)
+ax.legend(title="CAR", fontsize=16, title_fontsize=16, framealpha=0.7)
 
 plt.tight_layout()
 plt.show()
@@ -264,6 +265,7 @@ if flags["GEX"]:
 #| echo: false
 #| eval: !expr (params["gtf"] != "none")
 #| warning: false
+#| fig-height: 4
 
 if flags["GEX"]:
   CAR_quality_plot.plot_read_metrices(read_metrics)
@@ -287,7 +289,7 @@ theme_custom <- function(base_size = 10, base_family = "") {
       axis.text = element_text(size = base_size),
       axis.text.x = element_text(angle = 45, hjust = 1),
       legend.title = element_text(size = base_size + 1),
-      legend.text = element_text(size = base_size),
+      legend.text = element_text(size = base_size - 2),
       plot.title = element_text(size = base_size + 2, face = "bold", hjust = 0.5),
       strip.text = element_text(size = base_size + 1)  # For facets
     )
@@ -359,7 +361,7 @@ if (flags$GEX && params$gtf != "none" && !is.null(meta_data)){
     labs(
       title = "CAR+ T Cells",
       x = "Sample",
-      y = "CAR+ Cells (% of all T cells)",
+      y = "CAR+ Cells (%)",
       fill = "T cell type"
     ) +
     scale_y_continuous(limits = c(0, 100), expand = c(0, 0)) +
@@ -408,7 +410,7 @@ if (flags$GEX && params$gtf != "none" && !is.null(meta_data)){
   labs(
     title = "CAR+ NK Cells",
     x = "Sample",
-    y = "CAR+ NK Cells (% of all NK cells)"
+    y = "CAR+ NK Cells (%)"
   ) +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
@@ -455,7 +457,7 @@ if (flags$GEX && params$gtf != "none" && !is.null(meta_data)){
   labs(
     title = "CAR+ Macrophages",
     x = "Sample",
-    y = "CAR+ Macrophages (% of all Macrophages cells)"
+    y = "CAR+ Macrophages (%)"
   ) +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
@@ -502,7 +504,7 @@ if (flags$GEX && params$gtf != "none" && !is.null(meta_data)){
   labs(
     title = "CAR+ Dendritic Cells",
     x = "Sample",
-    y = "CAR+ Dendritic Cells (% of all Dentritic cells)"
+    y = "CAR+ Dendritic Cells (%)"
   ) +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
@@ -550,7 +552,7 @@ if (flags$GEX && params$gtf != "none" && !is.null(meta_data)){
   labs(
     title = "CAR+ B Cells",
     x = "Sample",
-    y = "CAR+ B Cells (% of all B cells)"
+    y = "CAR+ B Cells (%)"
   ) +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +

@@ -46,9 +46,9 @@
 #   - ADT → Centered Log-Ratio (CLR) normalization
 # - Ensures ADT data is stored as a sparse matrix.
 
-### `annotation_exr_and_scgate(se.meta, car_construct)`
+### `annotation_exr_and_scgate(se.meta, car_construct, scGate_model)`
 # - Annotates CAR-T cells based on raw expression (`car_by_expr()`).
-# - Uses scGate to classify cell types.
+# - Uses scGate (based on PBMC or TME_HiRes) to classify cell types.
 # - Integrates CAR expression with CD4/CD8 annotations.
 
 ### `data_quality_mito_ribo_complexity(se.meta)`
@@ -473,7 +473,7 @@ normalization_seurat <- function(se.meta, ADT){
 # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 # Annotation Cell types
 # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-annotation_exr_and_scgate <- function(se.meta, car_construct){
+annotation_exr_and_scgate <- function(se.meta, car_construct, scGate_model){
   log_message("PROCESS: Annotation_exr_and_scgate")
   # Annotate CAR-T cells based on raw counts by calling a custom function
   if (!is.null(car_construct)){
@@ -481,7 +481,12 @@ annotation_exr_and_scgate <- function(se.meta, car_construct){
   }
   # Annotate with scGATE (based on normalized counts)
   scGate_models_DB <- get_scGateDB()
-  current_model <-  scGate_models_DB$human$PBMC
+  current_model <- switch(
+    scGate_model,
+    "PBMC"     = scGate_models_DB$human$PBMC,
+    "TME_HiRes" = scGate_models_DB$human$TME_HiRes
+  )
+  log_message(paste("Using scGate model:", scGate_model))
   se.meta_annotated <- scGate(se.meta, model = current_model, save.levels = FALSE, multi.asNA = FALSE)
   #annotate T cells with and without
   if (!is.null(car_construct)){
