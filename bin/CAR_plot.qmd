@@ -588,7 +588,7 @@ if (is.null(meta_data)) {
 
 ```{r}
 #| label: GEX-metric-cell-type-composition-absolute
-#| fig-cap: "Absolute number of cell types per samples, based on annotation with scGate (PBMC model)."
+#| fig-cap: "Absolute number of cell types per samples, based on annotation with choosen scGate model."
 #| echo: false
 #| eval: !expr (!is.null(meta_data))
 #| warning: false
@@ -609,7 +609,11 @@ custom_colors <- c(
   "Platelet"                        = "#E31A1C",  # Strong Red
   "gdT"                             = "#FF7F00",  # Orange (bridge between innate & adaptive)
   "NA"                              = "#BBBBBB",  # Grey (uncertain classification)
-  "Multi"                           = "black"     # Black (indicates ambiguous classification)
+  "Multi"                           = "black",      # Black (indicates ambiguous classification)
+  "Endothelial"                     ="#E78AC3",   # same color as HSPC as not available in TME_HIres  model
+  "Epithelial"                      ="#8C510A",
+  "Fibroblast"                      ="#a200ffff",  
+  "Macrophage"                      ="#E31A1C"    # same color as Erythrocytes as not available in TME_HIres  model
 )
 
 
@@ -639,7 +643,7 @@ if (flags$GEX){
 
 ```{r}
 #| label: GEX-metric-cell-type-composition-relative
-#| fig-cap: "Relative number of cell types per samples, based on annotation with scGate (PBMC model)."
+#| fig-cap: "Relative number of cell types per samples, based on annotation with choosen scGate model."
 #| echo: false
 #| eval: !expr (!is.null(meta_data))
 #| warning: false
