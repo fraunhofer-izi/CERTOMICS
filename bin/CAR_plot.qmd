@@ -52,8 +52,7 @@ for (pack in list.of.packages) {
 }
 library("reticulate")
 source("helper_functions.R")
-use_python("/homes/olymp/christina.kuhn/.conda/envs/LivingDrugOmics/bin/python3", required=TRUE)
-# use_python("/usr/bin/python3", required = TRUE) 
+use_python("/usr/bin/python3", required = TRUE) 
 ```
 
 :::{.panel-tabset .nav-pills}
