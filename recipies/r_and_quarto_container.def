@@ -71,6 +71,7 @@ From: ubuntu:22.04
     R -e "remotes::install_version('doParallel', version = '1.0.17', repos = 'https://cloud.r-project.org')"
     R -e "remotes::install_version('Matrix', version = '1.6-5', repos = 'https://cloud.r-project.org')"
     R -e "remotes::install_version('scGate', version = '1.6.2', repos = 'https://cloud.r-project.org')"
+	R -e "remotes::install_version('SoupX', version = '1.6.2', repos='https://cloud.r-project.org')"
 	
     # Install GitHub packages with specific versions using remotes
     R -e "remotes::install_github('carmonalab/STACAS')"

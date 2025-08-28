@@ -38,12 +38,15 @@ workflow {
         safe_params.vdj_reference,
         safe_params.feat_reference,
         safe_params.gex_car_fa,
-        safe_params.gex_car_gtf
+        safe_params.gex_car_gtf,
+        safe_params.multiple_car_fa,
+        safe_params.scGate_model
     )
 
     // Run QC
     RUN_QUALITY_CONTROL (
         safe_params.samples,
+        RUN_SECONDARY_ANALYSIS.out.cellranger_web_summary,
         params.skip_qc,
         params.skip_fastqc,
         params.skip_fastq_screen,

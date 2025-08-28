@@ -78,10 +78,20 @@ workflow PARSE_PARAMETERS {
     out_gene_expression_car_gtf = null
     out_vdj_reference = null
     out_feature_reference = null
+    out_multiple_car_fa = null
+    out_scGate_model = params.scGate_model ?: 'PBMC' // default model
 
     // overwrite defaults
     if (needs_gex) {
+        def allowedModels = ['PBMC', 'TME_HiRes']
+        // If validation is disabled, this protects us:
+        if ( !allowedModels.contains(out_scGate_model) ) {
+            error "Invalid scGate_model: '${out_scGate_model}'. Must be one of: ${allowedModels.join(', ')}"
+        }
         // verify / check car files
+        if (params.multiple_car_fa) { // if multiple_cars are given for kallisto process
+            out_multiple_car_fa = verify_file(params.multiple_car_fa, 'multiple_car_fa')
+        }
         if (params.gene_expression_car_fa && params.gene_expression_car_gtf) {
             // both car files provided
             out_gene_expression_car_fa = verify_file(
@@ -151,6 +161,8 @@ workflow PARSE_PARAMETERS {
     gex_car_gtf = out_gene_expression_car_gtf
     vdj_reference = out_vdj_reference
     feat_reference = out_feature_reference
+    multiple_car_fa = out_multiple_car_fa
+    scGate_model = out_scGate_model
 }
 
 // <copied with small modifications from  from https://github.com/nf-core/fetchngs/blob/1.12.0/subworkflows/nf-core/utils_nfvalidation_plugin/main.nf>
@@ -163,7 +175,7 @@ workflow RUN_NF_VALIDATION {
     main:
     // Default values for strings
     workflow_command = 'nextflow run main.nf -profile <singularity/slurm/...> -params-file <parameter-file>'
-    pre_help_text = 'LivingDrugOmics is an optimized single cell RNA sequencing omics pipeline for the purpose of high-resolution CAR T cell profiling. It supports the analysis of scRNA-seq data from common 10x Genomics single cell protocols, including gene expression, V(D)J repertoire and antibody/antigen recognition. Specific quality control metrics are incorporated for robust identification of CAR-positive cells.'
+    pre_help_text = 'CERTOMICS is an Nextfow-based pipeline offering enhanced CERTainty in immunophenotyping and data interpretation, tailored for single-cell multiOMICS profling of adoptive cellular immunotherapies. It supports the analysis of scRNA-seq data from common 10x Genomics single cell protocols, including gene expression, V(D)J repertoire and antibody/antigen recognition. Specific quality control metrics are incorporated for robust identification of CAR-positive cells.'
     post_help_text = "For more details, please visit our Wiki: (${workflow.manifest.docsUrl}) or contact the authors directly."
 
     // Print help message if needed

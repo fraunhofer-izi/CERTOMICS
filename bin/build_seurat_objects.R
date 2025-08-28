@@ -4,7 +4,7 @@
 # Libraries
 # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 # Libraries needed for script
-.cran_packages = c("Seurat", "SeuratObject", "yaml", "dplyr", "doParallel", "parallel", "data.table", "Matrix", "stringr","scGate", "remotes")
+.cran_packages = c("Seurat", "SeuratObject", "yaml", "dplyr", "doParallel", "parallel", "data.table", "Matrix", "stringr","scGate", "remotes","SoupX")
 .bioc_packages = c("BiocParallel", "SingleCellExperiment", "scDblFinder", "scds","scRepertoire", "UCell", "clustifyr")
 .github_packages = c("carmonalab/ProjecTILs") # Add ProjecTILs
 
@@ -54,17 +54,26 @@ log_message <- function(message) {
 args = commandArgs(trailingOnly = TRUE)
 
 validate_args <- function(args) {
-  if (length(args) < 8) stop("Please provide at least eight arguments.")
+  if (length(args) < 9) stop("Please provide at least eight arguments.")
   if (!file.exists(args[1])) stop("Helper script not found: ", args[1])
-  if (!all(file.exists(unlist(strsplit(args[2], ","))))) stop("One or more cellranger directories do not exist.")
-  if (length(unlist(strsplit(args[2], ","))) != length(unlist(strsplit(args[5], ",")))) {
-    stop("The number of cellranger directories does not match the number of samples.")
-  }
-  if (args[8] == "none") {
+
+  filt <- unlist(strsplit(args[2], ","))
+  raw  <- unlist(strsplit(args[3], ","))
+  smps <- unlist(strsplit(args[6], ","))
+
+  if (!all(file.exists(filt))) stop("One or more filtered 10x dirs do not exist.")
+  if (!all(file.exists(raw)))  stop("One or more RAW 10x dirs do not exist.")
+  
+  if (length(filt) != length(smps))
+    stop("The number of filtered 10x dirs does not match the number of samples.")
+  if (length(raw)  != length(smps))
+    stop("The number of RAW 10x dirs does not match the number of samples.")
+
+  if (args[9] == "none") {
     message("No CAR are given")
     log_message("INFO: No CAR reference was given.")
-  } else if (!file.exists(args[8])) {
-    stop("GTF file not found: ", args[8])
+  } else if (!file.exists(args[9])) {
+    stop("GTF file not found: ", args[9])
   }
 }
 validate_args(args)
@@ -78,13 +87,15 @@ tryCatch({
 })
 # Parse arguments with error handling
 tryCatch({
-  cellranger_dirs <- unlist(strsplit(args[2], ","))
-  cellranger_vdjt <- unlist(strsplit(args[3], ","))
-  cellranger_vdjb <- unlist(strsplit(args[4], ","))
-  cellranger_samples <- unlist(strsplit(args[5], ","))
-  seurat_output <- args[6]
-  type_bits <- args[7]  # Binary string indicating available data
-  gtf_path <- args[8]
+  cellranger_dirs_filt <- unlist(strsplit(args[2], ","))  # filtered per-sample MEX
+  cellranger_dirs_raw  <- unlist(strsplit(args[3], ","))  # raw (unfiltered) MEX
+  cellranger_vdjt      <- unlist(strsplit(args[4], ","))
+  cellranger_vdjb      <- unlist(strsplit(args[5], ","))
+  cellranger_samples   <- unlist(strsplit(args[6], ","))
+  seurat_output        <- args[7]
+  type_bits            <- args[8]
+  gtf_path             <- args[9]
+  scGate_model         <- args[10]
 
   flags <- parse_binary_string(type_bits)
   #Position 1: GEX (Gene Expression)
@@ -115,8 +126,11 @@ tryCatch({
 })
 
 # Check that the number of samples matches the directories
-if (length(cellranger_dirs) != length(cellranger_samples)) {
-  stop("The number of directories does not match the number of samples.")
+if (length(cellranger_dirs_filt) != length(cellranger_samples)) {
+  stop("The number of filtered directories does not match the number of samples.")
+}
+if (length(cellranger_dirs_raw) != length(cellranger_samples)) {
+  stop("The number of RAW directories does not match the number of samples.")
 }
 if (gtf_path == "none") {
   car_construct <- NULL
@@ -129,17 +143,20 @@ if (gtf_path == "none") {
   car_construct <- gtf[1, 1]
 }
 
-if (any(cellranger_dirs != "none")) {
-  names(cellranger_dirs) <- cellranger_samples
-  cat(cellranger_dirs)
-}
-if (any(cellranger_vdjt != "none")) {
-  names(cellranger_vdjt) <- cellranger_samples
-  cat(cellranger_vdjt)
-}
-if (any(cellranger_vdjb != "none")) {
-  names(cellranger_vdjb) <- cellranger_samples
-  cat(cellranger_vdjb)
+names(cellranger_dirs_filt) <- cellranger_samples
+names(cellranger_dirs_raw)  <- cellranger_samples
+if (any(cellranger_vdjt != "none")) names(cellranger_vdjt) <- cellranger_samples
+if (any(cellranger_vdjb != "none")) names(cellranger_vdjb) <- cellranger_samples
+
+# Validate scGate_model
+allowed_models <- c("PBMC", "TME_HiRes")
+if (!(scGate_model %in% allowed_models)) {
+  stop(paste0(
+    "Invalid scGate_model: ", scGate_model,
+    ". Must be one of: ", paste(allowed_models, collapse = ", ")
+  ))
+} else {
+  log_message(paste("Using scGate_model:", scGate_model))
 }
 
 # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -150,12 +167,12 @@ if (!any(unlist(flags))){
 }
 
 # Load and Process Data
-se.meta <- read_in_10x_parallel(cellranger_dirs, flags$AntibodyCapture)
+se.meta <- read_in_10x_parallel(cellranger_dirs_filt, flags$AntibodyCapture, cellranger_dirs_raw)
 se.meta <- normalization_seurat(se.meta, flags$AntibodyCapture)
 se.meta <- data_quality_mito_ribo_complexity(se.meta)
 se.meta <- add_low_quality_info(se.meta)
 se.meta <- cell_cycle_scores(se.meta)
-se.meta <- annotation_exr_and_scgate(se.meta, car_construct)
+se.meta <- annotation_exr_and_scgate(se.meta, car_construct, scGate_model)
 
 if (flags$VDJT && flags$VDJB) {
   se.meta <- assign_both_vdj(obj = se.meta, batch_vdj = cellranger_vdjt, batch_vdb = cellranger_vdjb, TRUE)

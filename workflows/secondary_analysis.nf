@@ -59,6 +59,7 @@ process CELLRANGER_MULTI {
     path 'output/outs/per_sample_outs/*/count/sample_alignments.bam', emit: sample_alignments_bam
     path 'output/outs/per_sample_outs/*/count/sample_alignments.bam.bai', emit: sample_alignments_bai
     path 'output/outs/per_sample_outs/*/count/sample_filtered_feature_bc_matrix', emit: feature_bc_matrix, optional: true
+    path 'output/outs/multi/count/raw_feature_bc_matrix', emit: feature_raw_bc_matrix, optional: true
     path 'output/outs/per_sample_outs/*/vdj_t/filtered_contig_annotations.csv', emit: vdj_t_annotations, optional: true
     path 'output/outs/per_sample_outs/*/vdj_b/filtered_contig_annotations.csv', emit: vdj_b_annotations, optional: true
     val  sample.name, emit: sample_name
@@ -134,10 +135,12 @@ process SEURAT_OBJECT {
     input:
     path helper_functions_script, arity: '1'
     path feature_bc_matrices, stageAs: 'feature_bc_matrix', arity: '1..*'
+    path feature_raw_bc_matrix, stageAs: 'feature_raw_bc_matrix', arity: '1..*'
     path vdj_t_annotations, stageAs: 'vdj_t_annotation', arity: '1..*'
     path vdj_b_annotations, stageAs: 'vdj_b_annotation', arity: '1..*'
     path annotation, stageAs: 'annotation.gtf', arity: '1'
     val samples
+    val scGate_model
 
     output:
     path 'seurat_object.rds'
@@ -145,10 +148,12 @@ process SEURAT_OBJECT {
     script:
     library_types = get_library_types(samples.collect { sample -> sample.libraries }.flatten() )
     add_matrices = library_types[0] || library_types[3]
+    add_raw_matrices = library_types[0] 
     add_annotation_b = library_types[1]
     add_annotation_t = library_types[2]
 
     matrices = add_matrices ? feature_bc_matrices.join(',') : 'none'
+    matrices_raw = add_raw_matrices ? feature_raw_bc_matrix.join(',') : 'none'
     annotation_t = add_annotation_t ? vdj_t_annotations.join(',') : 'none'
     annotation_b = add_annotation_b ? vdj_b_annotations.join(',') : 'none'
 
@@ -156,12 +161,14 @@ process SEURAT_OBJECT {
     build_seurat_objects.R \
         ${helper_functions_script} \
         ${matrices} \
+        ${matrices_raw} \
         ${annotation_t} \
         ${annotation_b} \
         ${samples.collect { sample -> "\"${sample.name}\"" }.join(',')} \
         "seurat_object.rds" \
         "${get_sample_list_type_bits(samples)}" \
-        "${annotation}"
+        "${annotation}" \
+        "${scGate_model}"
     """
 }
 
@@ -174,19 +181,29 @@ process CAR_METRICS {
     path car_fa, stageAs: 'car.fa', arity: '1'
     path car_gtf, stageAs: 'car.gtf', arity: '1'
     val samples
-
+    path quant_dirs
+    
     output:
     path 'results_metrics_reads_CAR.csv', emit: metrics
     path 'results_coverage_against_CAR.csv', emit: coverage
     path 'results_coverage_against_CAR_unique.csv', emit: coverage_unique
+    path "CAR_est_counts_matrix.csv", optional: true, emit: kallisto_matrix
 
     script:
+    def kallisto_cmd = quant_dirs ? """
+    Kallisto_Comparisons.py \\
+        --input-dir ${quant_dirs.join(' ')} \\
+        --output CAR_est_counts_matrix.csv
+    """ : ""
+
     """
     CAR_quality.py \
         --sample_names ${samples.collect { sample -> sample.name }.join(' ')} \
         --bam_files ${sample_alignments_bam.join(' ')} \
         --CAR_fasta_file ${car_fa} \
         --CAR_gtf_file ${car_gtf}
+
+    ${kallisto_cmd}
     """
 }
 
@@ -195,6 +212,7 @@ process QUARTO {
     label 'module_quarto'
 
     input:
+    path kallisto_matrix, arity: '1' 
     path car_plot_qmd, arity: '1'
     path car_quality_plot_py, arity: '1'
     path helper_functions, arity: '1'
@@ -212,6 +230,7 @@ process QUARTO {
     """
     export HOME=\$(realpath "quarto-cache")
     quarto render ${car_plot_qmd} \
+        -P kallisto_matrix:${kallisto_matrix} \
         -P seurat_object:"${seurat_object}" \
         -P gtf:"${annotation}" \
         -P results_metrics_reads_CAR:"${metrics_reads_car}" \
@@ -226,6 +245,51 @@ process QUARTO {
     """
 }
 
+
+process KALLISTO_INDEX {
+    label 'module_kallisto'
+    input:
+    path fasta
+
+    output:
+    path "*.idx"
+
+    script:
+    def fasta_basename = fasta.getBaseName()  // strips .fa/.fasta
+    """
+    kallisto index -i ${fasta_basename}.idx ${fasta}
+    """
+}
+
+process KALLISTO_QUANT {
+    label 'module_kallisto'
+    fair true
+
+    input:
+    path index_file
+    path libraries, stageAs: 'library', arity: '1..*'
+    val sample_name
+
+    output:
+    path "quant_${sample_name}"
+
+    script:
+    """
+    echo "Running kallisto for ${sample_name}"
+
+    READS=\$(for lib in library*; do find -L "\$lib" -type f -name '*_R_*R2_*.fastq.gz' | head -n 1; done | sort | tr '\\n' ' ')
+
+    echo "Using reads: \$READS"
+
+    kallisto quant \\
+        -i ${index_file} \\
+        -o quant_${sample_name} \\
+        --single -l 350 -s 50 \\
+        --single-overhang \\
+        \$READS
+    """
+}
+
 workflow RUN_SECONDARY_ANALYSIS {
     take:
     // sample list
@@ -235,8 +299,12 @@ workflow RUN_SECONDARY_ANALYSIS {
     gex_reference
     vdj_reference
     feat_reference
+
+    //CAR references
     car_fa
     car_gtf
+    multiple_car_fa // for kallisto indexing & quantification
+    scGate_model
 
     main:
     CELLRANGER_MULTI (
@@ -249,14 +317,24 @@ workflow RUN_SECONDARY_ANALYSIS {
     )
 
     do_sub_workflow = (car_fa.value && car_gtf.value)
+    if (multiple_car_fa.value) {
+        KALLISTO_INDEX(multiple_car_fa)
+        KALLISTO_QUANT(
+            KALLISTO_INDEX.out, 
+            samples.map { sample -> sample.libraries.collect { library -> library.path } },
+            samples.map { sample -> sample.name })
+    }
+
     if (do_sub_workflow) {
         SEURAT_OBJECT (
             projectDir.resolve('bin/helper_functions.R'),
             CELLRANGER_MULTI.out.feature_bc_matrix.collect(),
+            CELLRANGER_MULTI.out.feature_raw_bc_matrix.collect(),
             CELLRANGER_MULTI.out.vdj_t_annotations.collect(),
             CELLRANGER_MULTI.out.vdj_b_annotations.collect(),
             car_gtf,
-            samples.collect()
+            samples.collect(),
+            scGate_model
         )
 
         CAR_METRICS (
@@ -264,10 +342,12 @@ workflow RUN_SECONDARY_ANALYSIS {
             CELLRANGER_MULTI.out.sample_alignments_bai.collect(),
             car_fa,
             car_gtf,
-            samples.collect()
+            samples.collect(),
+            multiple_car_fa.value ? KALLISTO_QUANT.out.collect() : []
         )
 
         QUARTO (
+            CAR_METRICS.out.kallisto_matrix,
             projectDir.resolve('bin/CAR_plot.qmd'),
             projectDir.resolve('bin/CAR_quality_plot.py'),
             projectDir.resolve('bin/helper_functions.R'),

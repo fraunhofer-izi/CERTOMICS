@@ -159,11 +159,6 @@ def generate_quality_metrics(
     for bam, sample in zip(bams, sample_names):
         print(f"Processing sample {sample}")
         logging.info("Processing sample %s", sample)
-
-        if bam.gettid(car_used) == -1:
-            logging.error("Contig %s not found in BAM file. Skipping sample %s.", car_used, sample)
-            continue  # Skip this BAM file
-
         logging.info("Contig '%s' found in BAM file.", car_used)
 
         # Count reads in the CAR region
@@ -179,7 +174,7 @@ def generate_quality_metrics(
         results_coverage_unique[sample] = calculate_unique_coverage(
             bam, car_used, min_start, max_end
         )
-
+    print(results_reads)
     # Save results as CSV files
     write_dict_to_csv("results_metrics_reads_CAR.csv", results_reads)
 
@@ -197,13 +192,17 @@ def count_reads_in_region(
         bam: pysam.AlignmentFile,
         car_used: str
 ) -> Tuple[int, int, int]:
-    """Counts total, forward, and reverse reads mapping to a specific CAR region."""
-    reads = list(bam.fetch(car_used))
-    
-    total_reads = len(reads)
-    forward_reads = sum(1 for read in reads if not read.is_reverse)
-    reverse_reads = total_reads - forward_reads  # Since all reads are either forward or reverse
-    
+    """Counts total, forward, and reverse reads mapping to a specific CAR region.
+    If region is not found, returns default values (0, 0, 0).
+    """
+    try:
+        reads = list(bam.fetch(car_used))
+        total_reads = len(reads)
+        forward_reads = sum(1 for read in reads if not read.is_reverse)
+        reverse_reads = total_reads - forward_reads
+    except (ValueError, KeyError):  # e.g., region not found in BAM file
+        total_reads = forward_reads = reverse_reads = 0
+
     return total_reads, forward_reads, reverse_reads
 
 def calculate_coverage(
@@ -212,15 +211,20 @@ def calculate_coverage(
         min_start: int,
         max_end: int
 ) -> List[int]:
-    """Calculates coverage across the CAR region."""
+    """Calculates coverage across the CAR region.
+    If region is not found, returns coverage as all zeros.
+    """
     coverage_counts = [0] * (max_end - min_start + 1)
 
-    for read in bam.fetch(car_used, min_start, max_end):
-        overlap_start = max(read.reference_start, min_start)
-        overlap_end = min(read.reference_end, max_end)
+    try:
+        for read in bam.fetch(car_used, min_start, max_end):
+            overlap_start = max(read.reference_start, min_start)
+            overlap_end = min(read.reference_end, max_end)
 
-        for j in range(overlap_start, overlap_end):
-            coverage_counts[j - min_start] += 1
+            for j in range(overlap_start, overlap_end):
+                coverage_counts[j - min_start] += 1
+    except (ValueError, KeyError):
+        print(f"Warning: CAR region '{car_used}' not found in BAM. Coverage set to zeros.")
 
     return coverage_counts
 
@@ -230,16 +234,21 @@ def calculate_unique_coverage(
         min_start: int,
         max_end: int
 ) -> List[int]:
-    """Calculates coverage of uniquely mapped reads in the CAR region."""
+    """Calculates coverage of uniquely mapped reads in the CAR region.
+    If region is not found, returns all-zero coverage.
+    """
     coverage_counts = [0] * (max_end - min_start + 1)
 
-    for read in bam.fetch(car_used, min_start, max_end):
-        if read.has_tag("NH") and read.get_tag("NH") == 1:  # Only uniquely mapped reads
-            overlap_start = max(read.reference_start, min_start)
-            overlap_end = min(read.reference_end, max_end)
+    try:
+        for read in bam.fetch(car_used, min_start, max_end):
+            if read.has_tag("NH") and read.get_tag("NH") == 1:  # Only uniquely mapped reads
+                overlap_start = max(read.reference_start, min_start)
+                overlap_end = min(read.reference_end, max_end)
 
-            for j in range(overlap_start, overlap_end):
-                coverage_counts[j - min_start] += 1
+                for j in range(overlap_start, overlap_end):
+                    coverage_counts[j - min_start] += 1
+    except (ValueError, KeyError):
+        print(f"Warning: CAR region '{car_used}' not found in BAM. Unique coverage set to zeros.")
 
     return coverage_counts
 
@@ -248,14 +257,21 @@ def write_dict_to_csv(
         data: dict[str, dict[str, int]]):
     """Writes dictionary data to a CSV file."""
     with open(filename, "w", encoding="utf-8") as f:
-        first_sample_key = next(iter(data))  # Get the first key
-        fieldnames = ["sample"] + list(data[first_sample_key].keys())
+        if not data:
+            # If data is empty, write default header and one line with zeros
+            fieldnames = ["sample","absolute_reads","forward_reads","reverse_reads"]
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerow({"sample": "NA", "absolute_reads": 0, "forward_reads": 0,"reverse_reads":0})  
+        else:
+            first_sample_key = next(iter(data))  # Get the first key
+            fieldnames = ["sample"] + list(data[first_sample_key].keys())
 
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        
-        for sample, metrics in data.items():
-            writer.writerow({"sample": sample, **metrics})
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            
+            for sample, metrics in data.items():
+                writer.writerow({"sample": sample, **metrics})
 
 def main():
     """
@@ -269,7 +285,7 @@ def main():
     args = parse_arguments()
     bams, CAR_fasta, CAR_anno = load_data(args.bam_files, args.CAR_fasta_file, args.CAR_gtf_file)
     print("Data loaded.")
-    print("samples:", args.sample_names)
+    print("Samples:", args.sample_names)
     print("CAR fasta:", CAR_fasta)
     print("CAR anno:", CAR_anno)
     generate_quality_metrics(bams, args.sample_names, CAR_anno)

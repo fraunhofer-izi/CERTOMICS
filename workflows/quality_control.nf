@@ -71,13 +71,14 @@ process MULTIQC {
     path config, stageAs: 'multiqc_config', arity: '1'
     path fastqc_out, stageAs: 'fastqc', arity: '0..*'
     path fastq_screen_out, stageAs: 'fastq_screen', arity: '0..*'
+    path cellranger_out, stageAs: 'cellranger_multi_*/web_summary.html', arity: '0..*'
 
     output:
     path 'multiqc'
 
     script:
     """
-    multiqc ${fastqc_out} ${fastq_screen_out} --config ${config} -o multiqc
+    multiqc ${fastqc_out} ${fastq_screen_out} ${cellranger_out} --config ${config} -o multiqc
     """
 }
 
@@ -85,6 +86,9 @@ workflow RUN_QUALITY_CONTROL {
     take:
     // samples
     samples
+
+    // cellranger multi
+    cellranger_multi
 
     // booleans
     skip_qc
@@ -115,8 +119,9 @@ workflow RUN_QUALITY_CONTROL {
         if (!skip_multiqc) {
             MULTIQC (
                 multiqc_config,
-                skip_fastqc  ? [] : FASTQC.out.collect(),
+                skip_fastqc ? [] : FASTQC.out.collect(),
                 skip_fastq_screen ? [] : FASTQ_SCREEN.out.collect(),
+                cellranger_multi.collect()
             )
         }
     }
