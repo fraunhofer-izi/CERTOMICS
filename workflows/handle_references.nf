@@ -35,20 +35,36 @@ process BUILD_GEX_REFERENCE {
     label 'big_task'
    
     input:
-    path src_fa, stageAs: 'src_fa', arity: '1'
-    path src_gtf, stageAs: 'src_gtf', arity: '1'
-    path car_fa, stageAs: 'car_fa'
-    path car_gtf, stageAs: 'car_gtf'
+    path src_fa, stageAs: 'src/*', arity: '1'
+    path src_gtf, stageAs: 'src/*', arity: '1'
+    path car_fa, stageAs: 'car/*'
+    path car_gtf, stageAs: 'car/*'
     val ref_version
 
     output:
     path "gex_reference"
 
-    shell:
+    script:
     if (ref_version == '2020') {
-        template 'build_reference_2020.sh'
+        """
+        bash build_reference_2020.sh \
+            ${src_fa} \
+            ${src_gtf} \
+            ${car_fa} \
+            ${car_gtf} \
+            ${task.cpus ? task.cpus : 0} \
+            ${task.memory ? task.memory.toGiga() : 0}
+        """
     } else if (ref_version == '2024') {
-        template 'build_reference_2024.sh'
+        """
+        bash build_reference_2024.sh \
+            ${src_fa} \
+            ${src_gtf} \
+            ${car_fa} \
+            ${car_gtf} \
+            ${task.cpus ? task.cpus : 0} \
+            ${task.memory ? task.memory.toGiga() : 0}
+        """
     } else {
         // alternative: allow the user to use custom templates with ref_version?
         error 'invalid reference version'
