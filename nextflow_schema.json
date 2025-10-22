@@ -146,6 +146,11 @@
       "description": "Options for skipping certain parts of the pipeline if they are not needed",
       "default": "",
       "properties": {
+        "pipeline_mode": {
+          "type": "string",
+          "default": "full",
+          "description": "Pipeline execution mode"
+        },
         "skip_qc": {
           "type": "boolean",
           "description": "Set this flag if you want the pipeline to skip the quality control steps"
