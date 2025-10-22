@@ -2,8 +2,8 @@
 
 process GET_GEX_SOURCE {
     input:
-    path fa
-    path gtf
+    path fa, stageAs: 'src/*'
+    path gtf, stageAs: 'src/*'
     val fa_url
     val gtf_url
 
