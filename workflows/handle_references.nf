@@ -1,11 +1,9 @@
 #!/usr/bin/env nextflow
 
-process GET_GEX_SOURCE {
+process PREPARE_SOURCE_FILES {
     input:
     path fa, stageAs: 'src/*'
     path gtf, stageAs: 'src/*'
-    val fa_url
-    val gtf_url
 
     output:
     path 'source.fa', emit: fa
@@ -13,18 +11,18 @@ process GET_GEX_SOURCE {
 
     script:
     """
-    if [ -f "$fa" ]; then
-        mv "$fa" "source.fa"
+    if ${fa.getExtension() == 'gz'}; then
+        echo "Unzipping FASTA"
+        zcat ${fa} > 'source.fa'
     else
-        echo "Downloading FASTA"
-        curl -sS "$fa_url" | zcat > "source.fa"
+        mv ${fa} 'source.fa'
     fi
 
-    if [ -f "$gtf" ]; then
-        mv "$gtf" "source.gtf"
+    if ${gtf.getExtension() == 'gz'}; then
+        echo "Unzipping GTF"
+        zcat ${gtf} > 'source.gtf'
     else
-        echo "Downloading GTF"
-        curl -sS "$gtf_url" | zcat > "source.gtf"
+        mv ${gtf} 'source.gtf'
     fi
     """
 }
@@ -37,21 +35,26 @@ process BUILD_GEX_REFERENCE {
     input:
     path src_fa, stageAs: 'src/*', arity: '1'
     path src_gtf, stageAs: 'src/*', arity: '1'
-    path car_fa, stageAs: 'car/*'
-    path car_gtf, stageAs: 'car/*'
+    path car_fa, stageAs: 'car/fa/*'
+    path car_gtf, stageAs: 'car/gtf/*'
     val ref_version
 
     output:
     path "gex_reference"
 
     script:
+    def do_car = (
+        car_fa.getSimpleName() != 'NO_FILE' &&
+        car_gtf.getSimpleName() != 'NO_FILE'
+    )
+
     if (ref_version == '2020') {
         """
         bash build_reference_2020.sh \
             ${src_fa} \
             ${src_gtf} \
-            ${car_fa} \
-            ${car_gtf} \
+            ${do_car ? car_fa : 0} \
+            ${do_car ? car_gtf : 0} \
             ${task.cpus ? task.cpus : 0} \
             ${task.memory ? task.memory.toGiga() : 0}
         """
@@ -60,8 +63,8 @@ process BUILD_GEX_REFERENCE {
         bash build_reference_2024.sh \
             ${src_fa} \
             ${src_gtf} \
-            ${car_fa} \
-            ${car_gtf} \
+            ${do_car ? car_fa : 0} \
+            ${do_car ? car_gtf : 0} \
             ${task.cpus ? task.cpus : 0} \
             ${task.memory ? task.memory.toGiga() : 0}
         """
@@ -73,45 +76,29 @@ process BUILD_GEX_REFERENCE {
 
 workflow HANDLE_GEX_REFERENCE {
     take:
-    is_needed // boolean
-    reference_version // integer
-
-    // urls
-    src_fa_url
-    src_gtf_url
+    // integer
+    reference_version
 
     // paths
-    reference
     src_fa
     src_gtf
     car_fa
     car_gtf
 
     main:
-    do_build = !reference.value
-    if (is_needed.value && do_build) {
-        do_get_fa  = !src_fa.value  || !file(src_fa.value).exists()
-        do_get_gtf = !src_gtf.value || !file(src_gtf.value).exists()
-        do_get_source = do_get_fa || do_get_gtf
+    PREPARE_SOURCE_FILES(
+        src_fa,
+        src_gtf
+    )
 
-        if (do_get_source) {
-            GET_GEX_SOURCE (
-                src_fa.value  ?: [],
-                src_gtf.value ?: [],
-                src_fa_url,
-                src_gtf_url
-            )
-        }
-
-        BUILD_GEX_REFERENCE (
-            do_get_source ? GET_GEX_SOURCE.out.fa : src_fa,
-            do_get_source ? GET_GEX_SOURCE.out.gtf : src_gtf,
-            car_fa.value  ?: [],
-            car_gtf.value ?: [],
-            reference_version
-        )
-    }
+    BUILD_GEX_REFERENCE(
+        PREPARE_SOURCE_FILES.out.fa,
+        PREPARE_SOURCE_FILES.out.gtf,
+        car_fa,
+        car_gtf,
+        reference_version
+    )
 
     emit:
-    is_needed ? (do_build ? BUILD_GEX_REFERENCE.out : reference) : []
+    reference = BUILD_GEX_REFERENCE.out
 }
