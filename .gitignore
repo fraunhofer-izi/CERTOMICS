@@ -1,3 +1,4 @@
 .nextflow*
 work/
 output/
+params_file*
