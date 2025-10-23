@@ -38,7 +38,7 @@ workflow {
         // Run analysis
         RUN_SECONDARY_ANALYSIS (
             safe_params.samples,
-            HANDLE_GEX_REFERENCE.out,
+            safe_params.gex_reference,
             safe_params.vdj_reference,
             safe_params.feat_reference,
             safe_params.gex_car_fa,
