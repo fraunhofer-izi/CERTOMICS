@@ -31,7 +31,7 @@ process CELLRANGER_MULTI {
     path gexReference, stageAs: 'references/gex/*', arity: '1'
     path vdjReference, stageAs: 'references/vdj/*', arity: '1'
     path featureReference, stageAs: 'references/feature/*', arity: '1'
-    path libraries, stageAs: 'library', arity: '1..*'
+    path libraries, stageAs: 'libraries/lib*', arity: '1..*'
     val  sample
 
     output:
@@ -296,13 +296,16 @@ workflow SECONDARY_ANALYSIS {
     multiCarFasta
     scGateModel
 
+    // misc
+    cellrangerClusterTemplate
+
     main:
     CELLRANGER_MULTI (
-        params.cluster_template,
-        getSampleLibraryPaths(samples),
+        cellrangerClusterTemplate,
         gexReference,
         vdjReference,
         featureReference,
+        samples.map { sample -> sample.libraries.collect { library -> library.path } },
         samples
     )
 

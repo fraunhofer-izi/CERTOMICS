@@ -37,6 +37,7 @@ workflow ANALYSIS {
     carGtf
     multiCarFasta
     scGateModel
+    cellrangerClusterTemplate
 
     main:
     SECONDARY_ANALYSIS (
@@ -47,7 +48,8 @@ workflow ANALYSIS {
         carFasta,
         carGtf,
         multiCarFasta,
-        scGateModel
+        scGateModel,
+        cellrangerClusterTemplate
     )
 
     // Run QC
@@ -71,7 +73,7 @@ workflow {
 
     // check / update parameters
     // samples
-    samples = params.samples.collect { sampleMap -> Sample.create(sampleMap) }
+    samples = Channel.fromList(params.samples.collect { sampleMap -> Sample.create(sampleMap) })
     
     // prebuilt references
     gexReference = parseOptionalPath(params.gene_expression_reference)
@@ -91,6 +93,7 @@ workflow {
     
     // misc
     multiCarFasta = parseOptionalPath(params.multiple_car_fa)
+    cellrangerClusterTemplate = parseOptionalPath(params.cellranger_cluster_template)
 
     if (params.pipeline_mode == null) {
         error('Parameter "pipeline_mode" cannot be null.')
@@ -111,7 +114,8 @@ workflow {
             gexCarFasta,
             gexCarGtf,
             multiCarFasta,
-            params.scGate_model
+            params.scGate_model,
+            cellrangerClusterTemplate
         )
     } else if (params.pipeline_mode == 'full') {
         doBuildReference = samples.collect { sample -> sample.hasGeneExpressionLibrary() }.any() && isNullFile(gexReference)
@@ -133,7 +137,8 @@ workflow {
             gexCarFasta,
             gexCarGtf,
             multiCarFasta,
-            params.scGate_model
+            params.scGate_model,
+            cellrangerClusterTemplate
         )
     } else {
         error("Unknown pipeline mode: '${params.pipeline_mode}'")
