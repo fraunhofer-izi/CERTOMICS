@@ -3,21 +3,21 @@
 process FASTQC {
     publishDir "${params.outdir}/fastqc/${task.tag}"
     label 'module_fastqc'
-    tag "${sample_name}"
+    tag "${sampleName}"
 
     input:
-    path fastq_paths, stageAs: 'fastq', arity: '1..*'
-    val fastq_ids
-    val sample_name
+    path fastqPaths, stageAs: 'fastq', arity: '1..*'
+    val fastqIds
+    val sampleName
 
     output:
     path "fastqc"
 
     script:
     libraries = []
-    fastq_paths.eachWithIndex { directory, index ->
+    fastqPaths.eachWithIndex { directory, index ->
         libraries.add(
-            directory.resolve("${fastq_ids[index]}_*")
+            directory.resolve("${fastqIds[index]}_*")
         )
     }
 
@@ -30,31 +30,31 @@ process FASTQC {
 process FASTQ_SCREEN {
     publishDir "${params.outdir}/fastq_screen/${task.tag}"
     label 'module_fastq_screen'
-    tag "${sample_name}"
+    tag "${sampleName}"
 
     input:
-    path fastq_screen_config, arity: '1'
-    path fastq_paths, stageAs: 'fastq', arity: '1..*'
-    val fastq_ids
-    val fastq_types
-    val sample_name
+    path fastqScreenConfig, arity: '1'
+    path fastqPaths, stageAs: 'fastq', arity: '1..*'
+    val fastqIds
+    val fastqTypes
+    val sampleName
 
     output:
     path "fastqs"
 
     script:
     libraries = []
-    fastq_paths.eachWithIndex { directory, index ->
-        if ('Gene Expression'.equals(fastq_types[index])) {
+    fastqPaths.eachWithIndex { directory, index ->
+        if ('Gene Expression'.equals(fastqTypes[index])) {
             libraries.add(
-                directory.resolve("${fastq_ids[index]}_*")
+                directory.resolve("${fastqIds[index]}_*")
             )
         }
     }
 
     """
     mkdir fastqs
-    sed 's+{FQS_DIR}+${params.fastq_screen_database_dir}+g' ${fastq_screen_config} > fastq_screen_config_interpolated.conf
+    sed 's+{FQS_DIR}+${params.fastq_screen_database_dir}+g' ${fastqScreenConfig} > fastq_screen_config_interpolated.conf
     fastq_screen ${libraries.join(' ')} \
         --conf fastq_screen_config_interpolated.conf \
         --threads ${task.cpus} \
@@ -68,66 +68,57 @@ process MULTIQC {
     label 'module_multiqc'
 
     input:
-    path config, stageAs: 'multiqc_config', arity: '1'
-    path fastqc_out, stageAs: 'fastqc', arity: '0..*'
-    path fastq_screen_out, stageAs: 'fastq_screen', arity: '0..*'
-    path cellranger_out, stageAs: 'cellranger_multi_*/web_summary.html', arity: '0..*'
-
+    path multiQcConfig, stageAs: 'multiqc_config', arity: '1'
+    path fastQcReports, stageAs: 'fastqc/*', arity: '0..*'
+    path fastqScreenReports, stageAs: 'fastq_screen/*', arity: '0..*'
+    
     output:
     path 'multiqc'
 
     script:
     """
-    multiqc ${fastqc_out} ${fastq_screen_out} ${cellranger_out} --config ${config} -o multiqc
+    multiqc ${fastQcReports} ${fastqScreenReports} --config ${multiQcConfig} -o multiqc
     """
 }
 
-workflow RUN_QUALITY_CONTROL {
+workflow QUALITY_CONTROL {
     take:
     // samples
     samples
 
-    // cellranger multi
-    cellranger_multi
-
     // booleans
-    skip_qc
-    skip_fastqc
-    skip_fastq_screen
-    skip_multiqc
+    skipFastQc
+    skipFastqScreen
+    skipMultiQc
 
     // paths
-    fastqs_config
-    multiqc_config
+    fastqScreenConfig
+    multiQcConfig
 
     main:
+    pathCh = samples.map { sample -> sample.libraries.collect { library -> library.path } }
+    typeCh = samples.map { sample -> sample.libraries.collect { library -> library.type } }
+    idCh   = samples.map { sample -> sample.libraries.collect { library -> library.id } }
+    nameCh = samples.map { sample -> sample.name }
+    
+    if (!skipFastQc) {
+        FASTQC (pathCh, idCh, nameCh)
+    }
 
-    if (!skip_qc) {
-        path_ch = samples.map { sample -> sample.libraries.collect { library -> library.path } }
-        type_ch = samples.map { sample -> sample.libraries.collect { library -> library.type } }
-        id_ch   = samples.map { sample -> sample.libraries.collect { library -> library.id } }
-        name_ch = samples.map { sample -> sample.name }
+    if (!skipFastqScreen) {
+        FASTQ_SCREEN (fastqScreenConfig, pathCh, idCh, typeCh, nameCh)
+    }
 
-        if (!skip_fastqc) {
-            FASTQC (path_ch, id_ch, name_ch)
-        }
-
-        if (!skip_fastq_screen) {
-            FASTQ_SCREEN (fastqs_config, path_ch, id_ch, type_ch, name_ch)
-        }
-
-        if (!skip_multiqc) {
-            MULTIQC (
-                multiqc_config,
-                skip_fastqc ? [] : FASTQC.out.collect(),
-                skip_fastq_screen ? [] : FASTQ_SCREEN.out.collect(),
-                cellranger_multi.collect()
-            )
-        }
+    if (!skipMultiQc) {
+        MULTIQC (
+            multiQcConfig,
+            skipFastQc ? Channel.empty() : FASTQC.out.collect(),
+            skipFastqScreen ? Channel.empty() : FASTQ_SCREEN.out.collect()
+        )
     }
 
     emit:
-    fastqc  = ( skip_qc || skip_fastqc       ) ? [] : FASTQC.out
-    fastqs  = ( skip_qc || skip_fastq_screen ) ? [] : FASTQ_SCREEN.out
-    multiqc = ( skip_qc || skip_multiqc      ) ? [] : MULTIQC.out
+    fastqc  = skipFastQc ? Channel.empty() : FASTQC.out
+    fastqs  = skipFastqScreen ? Channel.empty() : FASTQ_SCREEN.out
+    multiqc = skipMultiQc ? Channel.empty() : MULTIQC.out
 }

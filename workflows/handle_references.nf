@@ -1,9 +1,11 @@
 #!/usr/bin/env nextflow
 
+include { isNullFile } from '../modules/local/functions'
+
 process PREPARE_SOURCE_FILES {
     input:
-    path fa, stageAs: 'src/*'
-    path gtf, stageAs: 'src/*'
+    path fa, stageAs: 'src/fa/*'
+    path gtf, stageAs: 'src/gtf/*'
 
     output:
     path 'source.fa', emit: fa
@@ -27,78 +29,70 @@ process PREPARE_SOURCE_FILES {
     """
 }
 
-process BUILD_GEX_REFERENCE {
+process BUILD_REFERENCE {
     publishDir "${params.outdir}/gene_expression_reference"
     label 'module_cellranger'
     label 'big_task'
    
     input:
-    path src_fa, stageAs: 'src/*', arity: '1'
-    path src_gtf, stageAs: 'src/*', arity: '1'
-    path car_fa, stageAs: 'car/fa/*'
-    path car_gtf, stageAs: 'car/gtf/*'
-    val ref_version
+    path sourceFasta, stageAs: 'src/fa/*', arity: '1'
+    path sourceGtf, stageAs: 'src/gtf/*', arity: '1'
+    path carFasta, stageAs: 'car/fa/*', arity: '1'
+    path carGtf, stageAs: 'car/gtf/*', arity: '1'
+    val referenceVersion
 
     output:
     path "gex_reference"
 
     script:
-    def do_car = (
-        car_fa.getSimpleName() != 'NO_FILE' &&
-        car_gtf.getSimpleName() != 'NO_FILE'
-    )
-
-    if (ref_version == '2020') {
+    doCar = !isNullFile(carFasta) && !isNullFile(carGtf)
+    if (referenceVersion == '2020') {
         """
         bash build_reference_2020.sh \
-            ${src_fa} \
-            ${src_gtf} \
-            ${do_car ? car_fa : 0} \
-            ${do_car ? car_gtf : 0} \
+            ${sourceFasta} \
+            ${sourceGtf} \
+            ${doCar ? carFasta : 0} \
+            ${doCar ? carGtf : 0} \
             ${task.cpus ? task.cpus : 0} \
             ${task.memory ? task.memory.toGiga() : 0}
         """
-    } else if (ref_version == '2024') {
+    } else if (referenceVersion == '2024') {
         """
         bash build_reference_2024.sh \
-            ${src_fa} \
-            ${src_gtf} \
-            ${do_car ? car_fa : 0} \
-            ${do_car ? car_gtf : 0} \
+            ${sourceFasta} \
+            ${sourceGtf} \
+            ${doCar ? carFasta : 0} \
+            ${doCar ? carGtf : 0} \
             ${task.cpus ? task.cpus : 0} \
             ${task.memory ? task.memory.toGiga() : 0}
         """
     } else {
-        // alternative: allow the user to use custom templates with ref_version?
-        error 'invalid reference version'
+        error("'invalid reference version: ${referenceVersion}")
     }
 }
 
-workflow HANDLE_GEX_REFERENCE {
+workflow BUILD_CUSTOM_REFERENCE {
     take:
-    // integer
-    reference_version
-
-    // paths
-    src_fa
-    src_gtf
-    car_fa
-    car_gtf
+    referenceVersion
+    sourceFasta
+    sourceGtf
+    carFasta
+    carGtf
 
     main:
-    PREPARE_SOURCE_FILES(
-        src_fa,
-        src_gtf
+    PREPARE_SOURCE_FILES (
+        sourceFasta,
+        sourceGtf
     )
 
-    BUILD_GEX_REFERENCE(
+    BUILD_REFERENCE (
         PREPARE_SOURCE_FILES.out.fa,
         PREPARE_SOURCE_FILES.out.gtf,
-        car_fa,
-        car_gtf,
-        reference_version
+        carFasta,
+        carGtf,
+        referenceVersion
     )
 
     emit:
-    reference = BUILD_GEX_REFERENCE.out
+    reference = BUILD_REFERENCE.out
 }

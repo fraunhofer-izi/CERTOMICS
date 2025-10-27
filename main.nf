@@ -1,63 +1,58 @@
 #!/usr/bin/env nextflow
 
-include { RUN_NF_VALIDATION      } from './workflows/initiate_pipeline'
-include { HANDLE_GEX_REFERENCE   } from './workflows/handle_references'
-include { RUN_SECONDARY_ANALYSIS } from './workflows/secondary_analysis'
-include { RUN_QUALITY_CONTROL    } from './workflows/quality_control'
+include { NF_VALIDATION } from './workflows/initiate_pipeline'
+include { BUILD_CUSTOM_REFERENCE } from './workflows/handle_references'
+include { SECONDARY_ANALYSIS } from './workflows/secondary_analysis'
+include { QUALITY_CONTROL } from './workflows/quality_control'
+include { getNullFile; isNullFile; parseOptionalPath } from './modules/local/functions'
 
 workflow REFERENCE {
     take:
-    ref_ver
-
-    // paths
-    src_fa
-    src_fa_url
-    src_gtf
-    src_gtf_url
-    car_fa
-    car_gtf
+    referenceVersion
+    sourceFasta
+    sourceGtf
+    carFasta
+    carGtf
 
     main:
-    HANDLE_GEX_REFERENCE (
-        ref_ver,
-        (src_fa.getName() == 'NO_FILE') ? src_fa_url : src_fa,
-        (src_gtf.getName() == 'NO_FILE') ? src_gtf_url : src_gtf,
-        car_fa,
-        car_gtf
+    BUILD_CUSTOM_REFERENCE (
+        referenceVersion,
+        sourceFasta,
+        sourceGtf,
+        carFasta,
+        carGtf
     )
 
     emit:
-    reference = HANDLE_GEX_REFERENCE.out
+    reference = BUILD_CUSTOM_REFERENCE.out
 }
 
 workflow ANALYSIS {
     take:
     samples
-    gex_reference
-    vdj_reference
-    feat_reference
-    car_fa
-    car_gtf
-    car_fa_multi
-    scgate_model
+    gexReference
+    vdjReference
+    featureReference
+    carFasta
+    carGtf
+    multiCarFasta
+    scGateModel
 
     main:
-    RUN_SECONDARY_ANALYSIS (
+    SECONDARY_ANALYSIS (
         samples,
-        gex_reference,
-        vdj_reference,
-        feat_reference,
-        car_fa,
-        car_gtf,
-        car_fa_multi,
-        scgate_model
+        gexReference,
+        vdjReference,
+        featureReference,
+        carFasta,
+        carGtf,
+        multiCarFasta,
+        scGateModel
     )
 
     // Run QC
-    RUN_QUALITY_CONTROL (
+    QUALITY_CONTROL (
         samples,
-        RUN_SECONDARY_ANALYSIS.out.cellranger_web_summary,
-        params.skip_qc,
         params.skip_fastqc,
         params.skip_fastq_screen,
         params.skip_multiqc,
@@ -68,46 +63,79 @@ workflow ANALYSIS {
 
 workflow {
     // validation and Help message
-    RUN_NF_VALIDATION (
+    NF_VALIDATION (
         params.help,
         params.validate_params,
         projectDir.resolve('nextflow_schema.json')
     )
 
-    // parse parameters
-    /*
-    PARSE_PARAMETERS ()
-    safe_params = PARSE_PARAMETERS.out
-    */
+    // check / update parameters
+    // samples
+    samples = params.samples.collect { sampleMap -> Sample.create(sampleMap) }
+    
+    // prebuilt references
+    gexReference = parseOptionalPath(params.gene_expression_reference)
+    vdjReference = parseOptionalPath(params.vdj_reference)
+    featureReference = parseOptionalPath(params.feature_reference)
+
+    // custom reference data
+    gexCarFasta = parseOptionalPath(params.gene_expression_car_fa)
+    gexCarGtf = parseOptionalPath(params.gene_expression_car_gtf)
+    referenceVersion = params.gene_expression_reference_version
+    gexSourceFasta = (params.gene_expression_source_fa == null) ?
+        file(params.gene_expression_source_fa_url[referenceVersion]) :
+        file(params.gene_expression_source_fa, checkIfExists: true)
+    gexSourceGtf = (params.gene_expression_source_gtf == null) ?
+        file(params.gene_expression_source_gtf_url[referenceVersion]) :
+        file(params.gene_expression_source_gtf, checkIfExists: true)
+    
+    // misc
+    multiCarFasta = parseOptionalPath(params.multiple_car_fa)
 
     if (params.pipeline_mode == null) {
-        log.error('Parameter "pipeline_mode" cannot be null.')
-        System.exit(1)
+        error('Parameter "pipeline_mode" cannot be null.')
     } else if (params.pipeline_mode == 'reference') {
-        // build / manage references
-        def ref_ver = params.gene_expression_reference_version
-        REFERENCE(
-            ref_ver,
-            file(params.gene_expression_source_fa),
-            file(params.gene_expression_source_fa_url[ref_ver]),
-            file(params.gene_expression_source_gtf),
-            file(params.gene_expression_source_gtf_url[ref_ver]),
-            file(params.gene_expression_car_fa),
-            file(params.gene_expression_car_gtf)
+        REFERENCE (
+            referenceVersion,
+            gexSourceFasta,
+            gexSourceGtf,
+            gexCarFasta,
+            gexCarGtf
         )
     } else if (params.pipeline_mode == 'analysis') {
         ANALYSIS(
-            params.samples.collect { sampleMap -> Sample.create(sampleMap) },
-            file(params.gene_expression_reference),
-            file(params.vdj_reference),
-            file(params.feature_reference),
-            file(params.gene_expression_car_fa),
-            file(params.gene_expression_car_gtf),
-            file(params.multiple_car_fa),
+            samples,
+            gexReference,
+            vdjReference,
+            featureReference,
+            gexCarFasta,
+            gexCarGtf,
+            multiCarFasta,
+            params.scGate_model
+        )
+    } else if (params.pipeline_mode == 'full') {
+        doBuildReference = samples.collect { sample -> sample.hasGeneExpressionLibrary() }.any() && isNullFile(gexReference)
+        if (doBuildReference) {
+            gexReference = REFERENCE (
+                referenceVersion,
+                gexSourceFasta,
+                gexSourceGtf,
+                gexCarFasta,
+                gexCarGtf
+            ).out
+        }
+
+        ANALYSIS (
+            samples,
+            gexReference,
+            vdjReference,
+            featureReference,
+            gexCarFasta,
+            gexCarGtf,
+            multiCarFasta,
             params.scGate_model
         )
     } else {
-        log.error("Pipeline mode \"${params.pipeline_mode}\" is not supported")
-        System.exit(1)
+        error("Unknown pipeline mode: '${params.pipeline_mode}'")
     }
 }
