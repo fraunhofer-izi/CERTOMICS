@@ -112,13 +112,13 @@ workflow QUALITY_CONTROL {
     if (!skipMultiQc) {
         MULTIQC (
             multiQcConfig,
-            skipFastQc ? Channel.empty() : FASTQC.out.collect(),
-            skipFastqScreen ? Channel.empty() : FASTQ_SCREEN.out.collect()
+            skipFastQc ? channel.empty() : FASTQC.out.collect(),
+            skipFastqScreen ? channel.empty() : FASTQ_SCREEN.out.collect()
         )
     }
 
     emit:
-    fastqc  = skipFastQc ? Channel.empty() : FASTQC.out
-    fastqs  = skipFastqScreen ? Channel.empty() : FASTQ_SCREEN.out
-    multiqc = skipMultiQc ? Channel.empty() : MULTIQC.out
+    fastqc  = skipFastQc ? channel.empty() : FASTQC.out
+    fastqs  = skipFastqScreen ? channel.empty() : FASTQ_SCREEN.out
+    multiqc = skipMultiQc ? channel.empty() : MULTIQC.out
 }

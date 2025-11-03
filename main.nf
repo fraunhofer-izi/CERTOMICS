@@ -73,7 +73,7 @@ workflow {
 
     // check / update parameters
     // samples
-    samples = Channel.fromList(params.samples.collect { sampleMap -> Sample.create(sampleMap) })
+    samples = channel.fromList(params.samples.collect { sampleMap -> Sample.create(sampleMap) })
     
     // prebuilt references
     gexReference = parseOptionalPath(params.gene_expression_reference)
