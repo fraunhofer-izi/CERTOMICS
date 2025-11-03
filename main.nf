@@ -6,9 +6,6 @@ include { BUILD_CUSTOM_REFERENCE } from './workflows/handle_references'
 include { SECONDARY_ANALYSIS } from './workflows/secondary_analysis'
 include { QUALITY_CONTROL } from './workflows/quality_control'
 
-validateParameters()
-log.info paramsSummaryLog(workflow)
-
 workflow REFERENCE {
     take:
     referenceVersion
@@ -70,11 +67,8 @@ workflow ANALYSIS {
 
 workflow {
     // validation and Help message
-    NF_VALIDATION (
-        params.help,
-        params.validate_params,
-        projectDir.resolve('nextflow_schema.json')
-    )
+    validateParameters()
+    log.info paramsSummaryLog(workflow)
 
     // check / update parameters
     // samples
