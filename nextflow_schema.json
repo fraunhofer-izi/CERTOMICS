@@ -1,224 +1,197 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema",
-  "$id": "",
-  "title": "LivingDrugOmics pipeline parameters",
-  "description": "An optimized single cell RNA sequencing omics pipeline for the purpose of high-resolution CAR T cell profiling.",
-  "type": "object",
-  "definitions": {
-    "input_output_options": {
-      "title": "Input/output options",
-      "type": "object",
-      "fa_icon": "fas fa-terminal",
-      "description": "Define where the pipeline should find input data and save output data",
-      "required": ["samples"],
-      "properties": {
-        "outdir": {
-          "type": "string",
-          "format": "directory-path",
-          "description": "The output directory where the results will be saved",
-          "fa_icon": "fas fa-folder-open",
-          "default": "${projectDir}/output"
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://raw.githubusercontent.com/LivingDrugOmics//nextflow_schema.json",
+    "title": "LivingDrugOmics pipeline parameters",
+    "description": "This Pipeline was developed supporting 10x Genomics single cell protocols, including gene expression, V(D)J repertoire and surface protein detection",
+    "type": "object",
+    "$defs": {
+        "quality_control_options": {
+            "title": "Quality Control options",
+            "type": "object",
+            "description": "",
+            "default": "",
+            "properties": {
+                "skip_qc": {
+                    "type": "boolean"
+                },
+                "skip_fastq_screen": {
+                    "type": "boolean"
+                },
+                "skip_fastqc": {
+                    "type": "boolean"
+                },
+                "skip_multiqc": {
+                    "type": "boolean"
+                },
+                "scGate_model": {
+                    "type": "string",
+                    "default": "PBMC"
+                },
+                "multiqc_config": {
+                    "type": "string",
+                    "default": "${projectDir}/assets/config/multiqc_config.yaml"
+                },
+                "fastq_screen_database_dir": {
+                    "type": "string",
+                    "default": "${projectDir}/assets/fastqs_databases"
+                },
+                "fastq_screen_config": {
+                    "type": "string",
+                    "default": "${projectDir}/assets/config/fastqs_config.conf"
+                }
+            }
         },
-        "samples": {
-          "type": "array",
-          "description": "A list of samples defined like this: [[name: '..', libraries: [[fastq_id: '..', fastqs: '..', feature_types: '..']]]]"
+        "cellranger_options": {
+            "title": "CellRanger options",
+            "type": "object",
+            "description": "",
+            "default": "",
+            "properties": {
+                "cellranger_disable_ui": {
+                    "type": "boolean"
+                },
+                "cellranger_enable_cluster": {
+                    "type": "boolean"
+                },
+                "cellranger_cluster_template": {
+                    "type": "string",
+                    "default": "${projectDir}/assets/cluster_templates/slurm.template"
+                },
+                "cellranger_max_jobs": {
+                    "type": "integer",
+                    "default": 4
+                },
+                "cellranger_mem_per_core": {
+                    "type": "integer",
+                    "default": 8
+                }
+            }
+        },
+        "analysis_options": {
+            "title": "Analysis options",
+            "type": "object",
+            "description": "",
+            "default": "",
+            "properties": {
+                "samples": {
+                    "type": "array",
+                    "default": []
+                }
+            }
+        },
+        "reference_options": {
+            "title": "Reference options",
+            "type": "object",
+            "description": "",
+            "default": "",
+            "properties": {
+                "gene_expression_reference": {
+                    "type": "string"
+                },
+                "gene_expression_source_fa": {
+                    "type": "string"
+                },
+                "gene_expression_source_gtf": {
+                    "type": "string"
+                },
+                "gene_expression_car_fa": {
+                    "type": "string"
+                },
+                "gene_expression_car_gtf": {
+                    "type": "string"
+                },
+                "gene_expression_reference_version": {
+                    "type": "string",
+                    "default": 2024
+                },
+                "gene_expression_source_fa_url": {
+                    "type": "object",
+                    "default": "['2024':'http://ftp.ensembl.org/pub/release-109/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz', '2020':'http://ftp.ensembl.org/pub/release-98/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz']"
+                },
+                "gene_expression_source_gtf_url": {
+                    "type": "object",
+                    "default": "['2024':'http://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_44/gencode.v44.primary_assembly.annotation.gtf.gz', '2020':'http://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_32/gencode.v32.primary_assembly.annotation.gtf.gz']"
+                },
+                "feature_reference": {
+                    "type": "string"
+                },
+                "vdj_reference": {
+                    "type": "string"
+                },
+                "multiple_car_fa": {
+                    "type": "string"
+                }
+            }
+        },
+        "input_output_options": {
+            "title": "Input/output options",
+            "type": "object",
+            "fa_icon": "fas fa-terminal",
+            "description": "Define where the pipeline should find input data and save output data.",
+            "required": [
+                "outdir"
+            ],
+            "properties": {
+                "outdir": {
+                    "type": "string",
+                    "format": "directory-path",
+                    "description": "The output directory where the results will be saved. You have to use absolute paths to storage on Cloud infrastructure.",
+                    "fa_icon": "fas fa-folder-open",
+                    "default": "${projectDir}/output"
+                }
+            }
+        },
+        "generic_options": {
+            "title": "Generic options",
+            "type": "object",
+            "fa_icon": "fas fa-file-import",
+            "description": "Less common options for the pipeline, typically set in a config file.",
+            "help_text": "These options are common to all nf-core pipelines and allow you to customise some of the core preferences for how the pipeline runs.\n\nTypically these options would be set in a Nextflow config file loaded for all pipeline runs, such as `~/.nextflow/config`.",
+            "properties": {
+                "pipeline_mode": {
+                    "type": "string",
+                    "default": "full"
+                },
+                "validate_params": {
+                    "type": "boolean",
+                    "description": "Boolean whether to validate parameters against the schema at runtime",
+                    "default": true,
+                    "fa_icon": "fas fa-check-square",
+                    "hidden": true
+                },
+                "trace_report_suffix": {
+                    "type": "string",
+                    "fa_icon": "far calendar",
+                    "description": "Suffix to add to the trace report filename. Default is the date and time in the format yyyy-MM-dd_HH-mm-ss.",
+                    "hidden": true
+                },
+                "monochrome_logs": {
+                    "type": "boolean"
+                }
+            },
+            "required": [
+                "pipeline_mode"
+            ]
         }
-      }
     },
-    "generic_options": {
-      "title": "Generic options",
-      "type": "object",
-      "fa_icon": "fas fa-file-import",
-      "description": "Less common options for the pipeline, typically set in a config file",
-      "help_text": "These options are common to all nf-core pipelines and allow you to customise some of the core preferences for how the pipeline runs.\n\nTypically these options would be set in a Nextflow config file loaded for all pipeline runs, such as `~/.nextflow/config`",
-      "properties": {
-        "help": {
-          "type": "boolean",
-          "description": "Display help text",
-          "fa_icon": "fas fa-question-circle",
-          "hidden": true
+    "allOf": [
+        {
+            "$ref": "#/$defs/quality_control_options"
         },
-        "validate_params": {
-          "type": "boolean",
-          "default": true,
-          "description": "Validate input parameters"
+        {
+            "$ref": "#/$defs/cellranger_options"
         },
-        "monochrome_logs": {
-          "type": "boolean",
-          "description": "Disable colored text",
-          "hidden": true
+        {
+            "$ref": "#/$defs/analysis_options"
         },
-        "trace_report_suffix": {
-          "type": "string",
-          "default": "Current Date: yyyy-MM-dd_HH-mm-ss",
-          "description": "Suffix for pipeline_info files",
-          "hidden": true
+        {
+            "$ref": "#/$defs/reference_options"
+        },
+        {
+            "$ref": "#/$defs/input_output_options"
+        },
+        {
+            "$ref": "#/$defs/generic_options"
         }
-
-      }
-    },
-    "reference_options": {
-      "title": "Reference options",
-      "type": "object",
-      "description": "Define where the pipeline should find references needed for the analysis",
-      "default": "",
-      "properties": {
-        "gene_expression_reference": {
-          "type": "string",
-          "description": "A prebuilt 10xGenomics compatible gene expression reference"
-        },
-        "gene_expression_source_fa": {
-          "type": "string",
-          "description": "Genome to build a gene expression reference with at runtime. Attention: Must match 10X Genomics reference version 2020 or 2024: https://www.10xgenomics.com/support/software/cell-ranger/downloads/cr-ref-build-steps"
-        },
-        "gene_expression_source_gtf": {
-          "type": "string",
-          "description": "Annotation to build a gene expression reference with at runtime. Attention: Must match 10X Genomics reference version 2020 or 2024: https://www.10xgenomics.com/support/software/cell-ranger/downloads/cr-ref-build-steps"
-        },
-        "gene_expression_reference_version": {
-          "type": "string",
-          "description": "Template version to build the pipeline with ('2020' / '2024' default) prebuild GEX 10x Genomics references. If no --gene_expression_source_fa and --gene_expression_source_gtf is given, matching .fa and .gtf versions according to 10x will be downloaded. "
-        },
-        "gene_expression_car_fa": {
-          "type": "string",
-          "description": "CAR sequence to add to gene expression reference at runtime"
-        },
-        "gene_expression_car_gtf": {
-          "type": "string",
-          "description": "CAR annotation to add to gene expression reference at runtime"
-        },
-        "vdj_reference": {
-          "type": "string",
-          "description": "A prebuilt 10xGenomics compatible VDJ reference: https://www.10xgenomics.com/support/software/cell-ranger/downloads"
-        },
-        "feature_reference": {
-          "type": "string",
-          "description": "A prebuilt 10xGenomics compatible feature reference: https://www.10xgenomics.com/support/software/cell-ranger/downloads"
-        },
-        "gene_expression_source_fa_url": {
-          "type": "string",
-          "description": "Backup URL of a genome to build a gene expression reference with",
-          "default": "http://ftp.ensembl.org/pub/release-109/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz"
-        },
-        "gene_expression_source_gtf_url": {
-          "type": "string",
-          "description": "Backup URL of an annotation to build a gene expression reference with",
-          "default": "http://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_44/gencode.v44.primary_assembly.annotation.gtf.gz"
-        },
-        "multiple_car_fa": {
-          "type": "string",
-          "description": "Optional FASTA file containing multiple CAR constructs for kallisto quantification"
-        },
-        "scGate_model": {
-          "type": "string",
-          "description": "ScGate model used for annotation of gene expression data. Must be PBMC or TME_HiRes.",
-          "enum": ["PBMC", "TME_HiRes"],
-          "default": "PBMC"
-        }
-      }
-    },
-    "config_files": {
-      "title": "Config files",
-      "type": "object",
-      "description": "Seperate config files needed for programs within the pipeline",
-      "default": "",
-      "properties": {
-        "multiqc_config": {
-          "type": "string",
-          "default": "${projectDir}/assets/config/multiqc_config.yaml",
-          "description": "MultiQC config file"
-        },
-        "fastq_screen_config": {
-          "type": "string",
-          "default": "${projectDir}/assets/config/fastqs_config.conf",
-          "description": "FastQ Screen config file"
-        },
-        "fastq_screen_database_dir": {
-          "type": "string",
-          "default": "${projectDir}/assets/fastqs_databases",
-          "description": "FastQ Screen database directory"
-        }
-      }
-    },
-    "execution_options": {
-      "title": "Execution options",
-      "type": "object",
-      "description": "Options for skipping certain parts of the pipeline if they are not needed",
-      "default": "",
-      "properties": {
-        "pipeline_mode": {
-          "type": "string",
-          "default": "full",
-          "description": "Pipeline execution mode"
-        },
-        "skip_qc": {
-          "type": "boolean",
-          "description": "Set this flag if you want the pipeline to skip the quality control steps"
-        },
-        "skip_fastqc": {
-          "type": "boolean",
-          "description": "Set this flag if you want the pipeline to skip FastQC"
-        },
-        "skip_fastq_screen": {
-          "type": "boolean",
-          "description": "Set this flag if you want the pipeline to skip FastQ_Screen"
-        },
-        "skip_multiqc": {
-          "type": "boolean",
-          "description": "Set this flag if you want the pipeline to skip MultiQC"
-        }
-      }
-    },
-    "process_options": {
-      "title": "Process options",
-      "type": "object",
-      "description": "Options to configure process specific settings",
-      "default": "",
-      "properties": {
-        "cellranger_disable_ui": {
-          "type": "boolean",
-          "description": "Flag to disable the Web-UI served by the CellRanger multi / CellRanger mkref processes"
-        },
-        "cellranger_enable_cluster": {
-          "type": "boolean",
-          "description": "Flag to enable the subprocess distribution for CellRanger multi"
-        },
-        "cellranger_cluster_template": {
-          "type": "string",
-          "default": "${projectDir}/assets/config/slurm.template",
-          "description": "Template for the CellRanger Multi process to call subprocesses with"
-        },
-        "cellranger_max_jobs": {
-          "type": "integer",
-          "default": 4,
-          "description": "Maximum ammount of jobs that can be submitted by CellRanger subprocess distribution"
-        },
-        "cellranger_mem_per_core": {
-          "type": "integer",
-          "default": 8,
-          "description": "Ammount of memory per core used by CellRanger"
-        }
-      }
-    }
-  },
-  "allOf": [
-    {
-      "$ref": "#/definitions/input_output_options"
-    },
-    {
-      "$ref": "#/definitions/generic_options"
-    },
-    {
-      "$ref": "#/definitions/reference_options"
-    },
-    {
-      "$ref": "#/definitions/config_files"
-    },
-    {
-      "$ref": "#/definitions/execution_options"
-    },
-    {
-      "$ref": "#/definitions/process_options"
-    }
-  ]
+    ]
 }

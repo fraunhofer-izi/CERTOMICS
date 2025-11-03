@@ -6,8 +6,8 @@ set -e
 # input:
 #   $1: src_fa
 #   $2: src_gtf
-#   $3: car_fa
-#   $4: car_gtf
+#   $3: car_fa - if 0 then no car_fa
+#   $4: car_gtf - if 0 then no car_gtf
 #   $5: task.cpus
 #   $6: task.memory.toGiga()
 
@@ -114,7 +114,7 @@ grep -Ff "${build}/gene_allowlist" "$gtf_modified" \
 # Concatenate CAR files
 fasta_final="$fasta_modified"
 gtf_final="$gtf_filtered"
-if [ -f "$3" ] && [ -f "$4" ]; then
+if [[ ${3:-} != 0 && -f $3 ]] && [[ ${4:-} != 0 && -f $4 ]]; then
   gtf_car="${build}/$(basename "$gtf_final")_car.gtf"
   cat "$gtf_final" "$4" > "$gtf_car"
   gtf_final="$gtf_car"
@@ -123,8 +123,8 @@ if [ -f "$3" ] && [ -f "$4" ]; then
   cat "$fasta_final" "$3" > "$fasta_car"
   fasta_final="$fasta_car"
 else
-  [[ ! -f "$3" ]] && echo "Missing: $3"
-  [[ ! -f "$4" ]] && echo "Missing: $4"
+  [[ ${3:-} != 0 && ! -f $3 ]] && echo "Missing car_fa: $3"
+  [[ ${4:-} != 0 && ! -f $4 ]] && echo "Missing car_gtf: $4"
   echo "Missing at least one car file. Not concatenating."
 fi
 
