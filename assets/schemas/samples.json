@@ -1,0 +1,31 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "name": {
+                "type": "string"
+            },
+            "libraries": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "fastq_id": {
+                            "type": "string"
+                        },
+                        "fastqs": {
+                            "type": "string",
+                            "format": "directory-path"
+                        },
+                        "feature_types": {
+                            "type": "string",
+                            "enum": ["Gene Expression", "VDJ-B", "VDJ-T", "Antibody Capture"]
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

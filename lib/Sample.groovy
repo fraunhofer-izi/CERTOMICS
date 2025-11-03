@@ -9,6 +9,13 @@ public class Sample {
     String name
     List libraries
 
+    static Sample create (sampleName, sampleLibraries) {
+        return new Sample (
+            sampleName,
+            sampleLibraries.collect { libraryMap -> Library.create(libraryMap) }
+        )
+    }
+
     static Sample create (sampleMap) {
         return new Sample (
             sampleMap.name,

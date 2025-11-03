@@ -70,10 +70,16 @@ workflow {
     validateParameters()
     log.info paramsSummaryLog(workflow)
 
+    // read samples
+    samples = channel.fromList(samplesheetToList(params.samplesheet, projectDir.resolve('assets/schemas/samples.json')))
+        .map{ sampleName, libraries ->
+            Sample.create(
+                sampleName,
+                libraries.collect { id, path, type -> ['fastq_id': id, 'fastqs': path, 'feature_types': type] }
+            )
+        }
+
     // check / update parameters
-    // samples
-    samples = channel.fromList(params.samples.collect { sampleMap -> Sample.create(sampleMap) })
-    
     // prebuilt references
     gexReference = parseOptionalPath(params.gene_expression_reference)
     vdjReference = parseOptionalPath(params.vdj_reference)
