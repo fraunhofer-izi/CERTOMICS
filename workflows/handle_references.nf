@@ -42,7 +42,7 @@ process BUILD_REFERENCE {
     val referenceVersion
 
     output:
-    path "gex_reference"
+    path "gex_reference", emit: reference
 
     script:
     doCar = !isNullFile(carFasta) && !isNullFile(carGtf)
@@ -94,5 +94,5 @@ workflow BUILD_CUSTOM_REFERENCE {
     )
 
     emit:
-    reference = BUILD_REFERENCE.out
+    reference = BUILD_REFERENCE.out.reference
 }

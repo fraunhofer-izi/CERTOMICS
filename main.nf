@@ -1,10 +1,13 @@
 #!/usr/bin/env nextflow
+include { validateParameters; paramsSummaryLog; samplesheetToList } from 'plugin/nf-schema'
+include { getNullFile; isNullFile; parseOptionalPath } from './modules/local/functions'
 
-include { NF_VALIDATION } from './workflows/initiate_pipeline'
 include { BUILD_CUSTOM_REFERENCE } from './workflows/handle_references'
 include { SECONDARY_ANALYSIS } from './workflows/secondary_analysis'
 include { QUALITY_CONTROL } from './workflows/quality_control'
-include { getNullFile; isNullFile; parseOptionalPath } from './modules/local/functions'
+
+validateParameters()
+log.info paramsSummaryLog(workflow)
 
 workflow REFERENCE {
     take:
@@ -52,15 +55,17 @@ workflow ANALYSIS {
         cellrangerClusterTemplate
     )
 
-    // Run QC
-    QUALITY_CONTROL (
-        samples,
-        params.skip_fastqc,
-        params.skip_fastq_screen,
-        params.skip_multiqc,
-        params.fastq_screen_config,
-        params.multiqc_config,
-    )
+    if (!params.skip_qc) {
+        // Run QC
+        QUALITY_CONTROL (
+            samples,
+            params.skip_fastqc,
+            params.skip_fastq_screen,
+            params.skip_multiqc,
+            params.fastq_screen_config,
+            params.multiqc_config,
+        )
+    }
 }
 
 workflow {
@@ -84,6 +89,7 @@ workflow {
     gexCarFasta = parseOptionalPath(params.gene_expression_car_fa)
     gexCarGtf = parseOptionalPath(params.gene_expression_car_gtf)
     referenceVersion = params.gene_expression_reference_version
+    
     gexSourceFasta = (params.gene_expression_source_fa == null) ?
         file(params.gene_expression_source_fa_url[referenceVersion]) :
         file(params.gene_expression_source_fa, checkIfExists: true)
@@ -118,15 +124,17 @@ workflow {
             cellrangerClusterTemplate
         )
     } else if (params.pipeline_mode == 'full') {
-        doBuildReference = samples.collect { sample -> sample.hasGeneExpressionLibrary() }.any() && isNullFile(gexReference)
+        doBuildReference = isNullFile(gexReference) && samples.collect { sample -> sample.hasGeneExpressionLibrary() }.any()
         if (doBuildReference) {
-            gexReference = REFERENCE (
+            REFERENCE (
                 referenceVersion,
                 gexSourceFasta,
                 gexSourceGtf,
                 gexCarFasta,
                 gexCarGtf
-            ).out
+            )
+
+            gexReference = REFERENCE.out.reference 
         }
 
         ANALYSIS (

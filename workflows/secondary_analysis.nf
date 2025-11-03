@@ -31,8 +31,7 @@ process CELLRANGER_MULTI {
     path gexReference, stageAs: 'references/gex/*', arity: '1'
     path vdjReference, stageAs: 'references/vdj/*', arity: '1'
     path featureReference, stageAs: 'references/feature/*', arity: '1'
-    path libraries, stageAs: 'libraries/lib*', arity: '1..*'
-    val  sample
+    tuple val(sample), path(libraries, stageAs: 'libraries/lib*', arity: '1..*')
 
     output:
     path 'output', emit: full
@@ -300,13 +299,17 @@ workflow SECONDARY_ANALYSIS {
     cellrangerClusterTemplate
 
     main:
+    sample_libs = samples.map { sample ->
+        def libraries = sample.libraries.collect { library -> file(library.path) }
+        tuple(sample, libraries)
+    }
+
     CELLRANGER_MULTI (
         cellrangerClusterTemplate,
         gexReference,
         vdjReference,
         featureReference,
-        samples.map { sample -> sample.libraries.collect { library -> library.path } },
-        samples
+        sample_libs
     )
 
     doKallistoWorkflow = !isNullFile(multiCarFasta)

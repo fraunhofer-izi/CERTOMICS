@@ -4,6 +4,8 @@ include { paramsHelp         } from 'plugin/nf-validation'
 include { paramsSummaryLog   } from 'plugin/nf-validation'
 include { validateParameters } from 'plugin/nf-validation'
 
+
+
 // <copied with small modifications from  from https://github.com/nf-core/fetchngs/blob/1.12.0/subworkflows/nf-core/utils_nfvalidation_plugin/main.nf>
 workflow NF_VALIDATION {
     take:
