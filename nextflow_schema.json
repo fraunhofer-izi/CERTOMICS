@@ -43,24 +43,20 @@
         "gene_expression_source_fa": {
           "type": "string",
           "description": "The FASTA file to build a gene expression reference with at runtime",
-          "format": "file-path",
-          "pattern": "^\\S+\\.fa(?:\\.gz)?$"
+          "format": "file-path"
         },
         "gene_expression_source_gtf": {
           "type": "string",
           "description": "The GTF file to build a gene expression reference with at runtime",
-          "format": "file-path",
-          "pattern": "^\\S+\\.gtf(?:\\.gz)?$"
+          "format": "file-path"
         },
         "gene_expression_car_fa": {
           "type": "string",
-          "format": "file-path",
-          "pattern": "^\\S+\\.fa$"
+          "format": "file-path"
         },
         "gene_expression_car_gtf": {
           "type": "string",
-          "format": "file-path",
-          "pattern": "^\\S+\\.gtf$"
+          "format": "file-path"
         },
         "gene_expression_reference_version": {
           "type": "string",
