@@ -12,32 +12,45 @@
       "default": "",
       "properties": {
         "skip_qc": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Flag to skip QC workflow"
         },
         "skip_fastq_screen": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Flag to skip FastQ_Screen process"
         },
         "skip_fastqc": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Flag to skip FastQC process"
         },
         "skip_multiqc": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Flag to skip MultiQC process"
         },
         "scGate_model": {
           "type": "string",
-          "default": "PBMC"
+          "default": "PBMC",
+          "enum": ["PBMC", "TME_HiRes"]
         },
         "multiqc_config": {
           "type": "string",
-          "default": "${projectDir}/assets/config/multiqc_config.yaml"
+          "default": "${projectDir}/assets/config/multiqc_config.yaml",
+          "description": "MultiQC config file",
+          "format": "file-path",
+          "pattern": "^\\S+\\.ya?ml$",
+          "mimetype": "application/yaml"
         },
         "fastq_screen_database_dir": {
           "type": "string",
-          "default": "${projectDir}/assets/fastqs_databases"
+          "default": "${projectDir}/assets/fastqs_databases",
+          "description": "Root directory containing FastQ_Screen databases",
+          "format": "directory-path"
         },
         "fastq_screen_config": {
           "type": "string",
-          "default": "${projectDir}/assets/config/fastqs_config.conf"
+          "default": "${projectDir}/assets/config/fastqs_config.conf",
+          "description": "FastQ_Screen config file",
+          "format": "file-path"
         }
       }
     },
@@ -48,22 +61,28 @@
       "default": "",
       "properties": {
         "cellranger_disable_ui": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Flag to disable the Web-UI provided by the CellRanger processes"
         },
         "cellranger_enable_cluster": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Experimental: Enable cluster mode for the CELLRANGER_MULTI process"
         },
         "cellranger_cluster_template": {
           "type": "string",
-          "default": "${projectDir}/assets/cluster_templates/slurm.template"
+          "default": "${projectDir}/assets/cluster_templates/slurm.template",
+          "description": "Experimental: Path of cluster template needed for cluster mode",
+          "format": "file-path"
         },
         "cellranger_max_jobs": {
           "type": "integer",
-          "default": 4
+          "default": 4,
+          "description": "Experimental: Maximum number of jobs per CELLRANGER_MULTI process that can run in parallel"
         },
         "cellranger_mem_per_core": {
           "type": "integer",
-          "default": 8
+          "default": 8,
+          "description": "Experimental: Maximum ammount of Memory (in GB) that can be used by each CPU core"
         }
       }
     },
@@ -74,23 +93,37 @@
       "default": "",
       "properties": {
         "gene_expression_reference": {
-          "type": "string"
+          "type": "string",
+          "description": "The gene expression reference used by the CELLRANGER_MULTI process",
+          "format": "directory-path"
         },
         "gene_expression_source_fa": {
-          "type": "string"
+          "type": "string",
+          "description": "The FASTA file to build a gene expression reference with at runtime",
+          "format": "file-path",
+          "pattern": "^\\S+\\.fa(?:\\.gz)?$"
         },
         "gene_expression_source_gtf": {
-          "type": "string"
+          "type": "string",
+          "description": "The GTF file to build a gene expression reference with at runtime",
+          "format": "file-path",
+          "pattern": "^\\S+\\.gtf(?:\\.gz)?$"
         },
         "gene_expression_car_fa": {
-          "type": "string"
+          "type": "string",
+          "format": "file-path",
+          "pattern": "^\\S+\\.fa$"
         },
         "gene_expression_car_gtf": {
-          "type": "string"
+          "type": "string",
+          "format": "file-path",
+          "pattern": "^\\S+\\.gtf$"
         },
         "gene_expression_reference_version": {
           "type": "string",
-          "default": 2024
+          "default": "2024",
+          "description": "Version of the script to be used when building gene expression reference",
+          "enum": ["2020", "2024"]
         },
         "gene_expression_source_fa_url": {
           "type": "object"
@@ -99,10 +132,16 @@
           "type": "object"
         },
         "feature_reference": {
-          "type": "string"
+          "type": "string",
+          "description": "The feature reference used by the CELLRANGER_MULTI process",
+          "format": "file-path",
+          "pattern": "^\\S+\\.csv$",
+          "mimetype": "test/csv"
         },
         "vdj_reference": {
-          "type": "string"
+          "type": "string",
+          "description": "The VDJ reference used by the CELLRANGER_MULTI process",
+          "format": "directory-path"
         },
         "multiple_car_fa": {
           "type": "string"
@@ -117,7 +156,12 @@
       "required": ["outdir"],
       "properties": {
         "samplesheet": {
-          "type": "string"
+          "type": "string",
+          "format": "file-path",
+          "mimetype": "application/yaml",
+          "schema": "${projectDir}/assets/schemas/samples.json",
+          "pattern": "^\\S+\\.ya?ml$",
+          "description": "The samples to run the analysis and QC processes on"
         },
         "outdir": {
           "type": "string",
@@ -137,7 +181,8 @@
       "properties": {
         "pipeline_mode": {
           "type": "string",
-          "default": "full"
+          "default": "full",
+          "enum": ["reference", "analysis", "full"]
         },
         "validate_params": {
           "type": "boolean",
