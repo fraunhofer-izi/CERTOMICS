@@ -349,8 +349,8 @@ workflow SECONDARY_ANALYSIS {
             CELLRANGER_MULTI.out.sampleAlignmentsBai.collect(),
             carFasta,
             carGtf,
+            doKallistoWorkflow ? KALLISTO_QUANT.out.collect() : getNullFile(),
             samples.collect(),
-            doKallistoWorkflow ? KALLISTO_QUANT.out.collect() : getNullFile()
         )
 
         QUARTO (
