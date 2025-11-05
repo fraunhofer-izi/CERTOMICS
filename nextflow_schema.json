@@ -65,10 +65,12 @@
           "enum": ["2020", "2024"]
         },
         "gene_expression_source_fa_url": {
-          "type": "object"
+          "type": "string",
+          "description": "URL to download FASTA file from if gene_expression_source_fa is not provided"
         },
         "gene_expression_source_gtf_url": {
-          "type": "object"
+          "type": "object",
+          "description": "URL to download GTF file from if gene_expression_source_gtf is not provided"
         },
         "feature_reference": {
           "type": "string",
@@ -178,7 +180,7 @@
         "pipeline_mode": {
           "type": "string",
           "default": "full",
-          "enum": ["reference", "analysis", "full"]
+          "enum": ["reference", "analysis", "full", "debug"]
         },
         "validate_params": {
           "type": "boolean",

@@ -6,6 +6,12 @@ include { BUILD_CUSTOM_REFERENCE } from './workflows/handle_references'
 include { SECONDARY_ANALYSIS } from './workflows/secondary_analysis'
 include { QUALITY_CONTROL } from './workflows/quality_control'
 
+def handleSourceUrls (sourceFile, sourceUrl, sourceUrlFallback) {
+    if (sourceFile) return channel.fromPath(sourceFile, checkIfExists: true)
+    if (sourceUrl) return channel.fromPath(sourceUrl)
+    return channel.fromPath(sourceUrlFallback)
+}
+
 workflow REFERENCE {
     take:
     referenceVersion
@@ -71,13 +77,25 @@ workflow {
     log.info paramsSummaryLog(workflow)
 
     // read samples
-    samples = channel.fromList(samplesheetToList(params.samplesheet, projectDir.resolve('assets/schemas/samples.json')))
-        .map{ sampleName, libraries ->
+    samples = channel.empty()
+    if (params.samplesheet) {
+        samples = channel.fromList(
+            samplesheetToList(
+                params.samplesheet,
+                projectDir.resolve('assets/schemas/samples.json')
+            )
+        ).map { sampleName, libraries ->
             Sample.create(
                 sampleName,
                 libraries.collect { id, path, type -> ['fastq_id': id, 'fastqs': path, 'feature_types': type] }
             )
         }
+    }
+    
+    urlMap = samplesheetToList(
+        projectDir.resolve('assets/reference_source_urls.yaml'),
+        projectDir.resolve('assets/schemas/reference_source_urls.json')
+    ).collectEntries { version, fa, gtf -> [(version): ['fa': fa, 'gtf': gtf]] }
 
     // check / update parameters
     // prebuilt references
@@ -89,14 +107,23 @@ workflow {
     gexCarFasta = parseOptionalPath(params.gene_expression_car_fa)
     gexCarGtf = parseOptionalPath(params.gene_expression_car_gtf)
     referenceVersion = params.gene_expression_reference_version
-    
-    gexSourceFasta = (params.gene_expression_source_fa == null) ?
-        file(params.gene_expression_source_fa_url[referenceVersion]) :
-        file(params.gene_expression_source_fa, checkIfExists: true)
-    gexSourceGtf = (params.gene_expression_source_gtf == null) ?
-        file(params.gene_expression_source_gtf_url[referenceVersion]) :
-        file(params.gene_expression_source_gtf, checkIfExists: true)
-    
+
+    if (!urlMap.containsKey(referenceVersion)) {
+        error("Missing source urls for reference version '${referenceVersion}'.")
+    }
+
+    gexSourceFasta = handleSourceUrls(
+        params.gene_expression_source_fa,
+        params.gene_expression_source_fa_url,
+        urlMap[referenceVersion].fa
+    )
+
+    gexSourceGtf = handleSourceUrls (
+        params.gene_expression_source_gtf,
+        params.gene_expression_source_gtf_url,
+        urlMap[referenceVersion].gtf
+    )
+
     // misc
     multiCarFasta = parseOptionalPath(params.multiple_car_fa)
     cellrangerClusterTemplate = parseOptionalPath(params.cellranger_cluster_template)
