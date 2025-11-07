@@ -161,7 +161,7 @@ workflow {
                 gexCarGtf
             )
 
-            gexReference = REFERENCE.out.reference 
+            gexReference = REFERENCE.out.reference.first()
         }
 
         ANALYSIS (
