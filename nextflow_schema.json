@@ -52,11 +52,13 @@
         },
         "gene_expression_car_fa": {
           "type": "string",
-          "format": "file-path"
+          "format": "file-path",
+          "description": "The FASTA file of the CAR seqence"
         },
         "gene_expression_car_gtf": {
           "type": "string",
-          "format": "file-path"
+          "format": "file-path",
+          "description": "The GTF file of the CAR annotation"
         },
         "gene_expression_reference_version": {
           "type": "string",
@@ -83,9 +85,6 @@
           "type": "string",
           "description": "The VDJ reference used by the CELLRANGER_MULTI process",
           "format": "directory-path"
-        },
-        "multiple_car_fa": {
-          "type": "string"
         }
       }
     },
@@ -114,7 +113,12 @@
         "scGate_model": {
           "type": "string",
           "default": "PBMC",
-          "enum": ["PBMC", "TME_HiRes"]
+          "enum": ["PBMC", "TME_HiRes"],
+          "description": "Gating model used for cell type annotations"
+        },
+        "multiple_car_fa": {
+          "type": "string",
+          "description": "The FASTA file containing several CAR isoforms to compare counts"
         },
         "multiqc_config": {
           "type": "string",
@@ -180,7 +184,8 @@
         "pipeline_mode": {
           "type": "string",
           "default": "full",
-          "enum": ["reference", "analysis", "full", "debug"]
+          "enum": ["reference", "analysis", "full"],
+          "description": "Enum value to declare the set of workflows to run"
         },
         "validate_params": {
           "type": "boolean",
