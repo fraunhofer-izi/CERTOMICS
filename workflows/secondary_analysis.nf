@@ -31,7 +31,11 @@ process CELLRANGER_MULTI {
     path gexReference, stageAs: 'references/gex/*', arity: '1'
     path vdjReference, stageAs: 'references/vdj/*', arity: '1'
     path featureReference, stageAs: 'references/feature/*', arity: '1'
-    tuple val(sampleName), val(libraryList), path(libraryPaths, stageAs: 'libraries/lib*', arity: '1..*')
+    tuple (
+        path (libraryPaths, stageAs: 'libraries/lib*', arity: '1..*'),
+        val (libraryList),
+        val (sampleName)
+    )
 
     output:
     path 'output', emit: full
@@ -246,6 +250,7 @@ process KALLISTO_INDEX {
 
     script:
     def fasta_basename = fasta.getBaseName()  // strips .fa/.fasta
+
     """
     kallisto index -i ${fasta_basename}.idx ${fasta}
     """
@@ -303,10 +308,10 @@ workflow SECONDARY_ANALYSIS {
 
     main:
     sample_libs = samples.map { sample ->
-        tuple(
-            sample.name,
+        tuple (
+            sample.libraries.collect { library -> file(library.path) },
             sample.libraries,
-            sample.libraries.collect { library -> file(library.path) }
+            sample.name
         )
     }
 
@@ -320,11 +325,11 @@ workflow SECONDARY_ANALYSIS {
 
     doKallistoWorkflow = !isNullFile(multiCarFasta)
     if (doKallistoWorkflow) {
-        KALLISTO_INDEX(
+        KALLISTO_INDEX (
             multiCarFasta
         )
         
-        KALLISTO_QUANT(
+        KALLISTO_QUANT (
             KALLISTO_INDEX.out,
             getSampleLibraryPaths(samples),
             getSampleNames(samples)
