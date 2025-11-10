@@ -1,0 +1,20 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "version": {
+                "type": "string"
+            },
+            "fa": {
+                "type": "string",
+                "format": "uri"
+            },
+            "gtf": {
+                "type": "string",
+                "format": "uri"
+            }
+        }
+    }
+}

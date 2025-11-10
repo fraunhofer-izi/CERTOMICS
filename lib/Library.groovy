@@ -10,7 +10,7 @@ public class Library {
 
     String id
     String type
-    String path
+    Path path
 
     static Library create (libraryId, libraryType, libraryPath) {
         // verify libraryType
@@ -22,10 +22,9 @@ public class Library {
         // verify libraryPath
         if (!libraryPath)
             error ("Library path cannot be falsy ($libraryPath).")
-        def pathObject = Path.of(libraryPath)
-        if (!pathObject.exists())
+        if (!libraryPath.exists())
             error ("Library path $libraryPath does not exist.")
-        if (!pathObject.isDirectory())
+        if (!libraryPath.isDirectory())
             error ("Library path $libraryPath is not a directory.")
         return new Library (libraryId, libraryType, libraryPath)
     }

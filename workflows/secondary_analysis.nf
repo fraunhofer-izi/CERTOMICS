@@ -24,14 +24,18 @@ process CELLRANGER_MULTI {
     label 'module_cellranger'
     label 'big_task'
     fair true
-    tag "${sample.name}"
+    tag "${sampleName}"
 
     input:
     path clusterTemplate, stageAs: 'cluster/*', arity: '1'
     path gexReference, stageAs: 'references/gex/*', arity: '1'
     path vdjReference, stageAs: 'references/vdj/*', arity: '1'
     path featureReference, stageAs: 'references/feature/*', arity: '1'
-    tuple val(sample), path(libraries, stageAs: 'libraries/lib*', arity: '1..*')
+    tuple (
+        path (libraryPaths, stageAs: 'libraries/lib*', arity: '1..*'),
+        val (libraryList),
+        val (sampleName)
+    )
 
     output:
     path 'output', emit: full
@@ -44,20 +48,23 @@ process CELLRANGER_MULTI {
     path 'output/outs/per_sample_outs/*/vdj_b/filtered_contig_annotations.csv', emit: vdjBAnnotations, optional: true
 
     script:
-    println("NAMES:" + gexReference.getSimpleName() + " " + isNullFile(gexReference))
-
-    library_types = getLibraryTypes(sample.libraries)
-    if (isNullFile(gexReference) && library_types.gex)
+    libraryTypes = getLibraryTypes(libraryList)
+    if (isNullFile(gexReference) && libraryTypes.gex)
         error('Gene expression reference needed but not provided.')
-    if (isNullFile(vdjReference) && (library_types.vdj_b || library_types.vdj_t))
+    if (isNullFile(vdjReference) && (libraryTypes.vdj_b || libraryTypes.vdj_t))
         error('VDJ reference needed but not provided')
-    if (isNullFile(featureReference) && library_types.feat)
+    if (isNullFile(featureReference) && libraryTypes.feat)
         error('Feature reference needed but not provided.')
     
-    // using ${libraries[index]} instead of ${library.path} to get staged path
     libs = ['[libraries]', 'fastq_id,fastqs,feature_types']
-    sample.libraries.eachWithIndex { library, index ->
-        libs.add([library.id, "\$(realpath -s ${libraries[index]})", library.type].join(','))
+    [libraryList, libraryPaths].transpose().each { libraryObject, libraryPath ->
+        libs.add(
+            [
+                libraryObject.id,
+                "\$(realpath -s ${libraryPath})",
+                libraryObject.type
+            ].join(',')
+        )
     }
 
     cr_args = params.cellranger_disable_ui ? ['--disable-ui'] : []
@@ -81,11 +88,11 @@ process CELLRANGER_MULTI {
     touch multi.csv
     CR_VERSION=\$(cellranger --version | sed -n 's/.*cellranger-\\([0-9]\\+\\).*/\\1/p')
     if [[ "\$CR_VERSION" == "8" ]]; then
-        if ${library_types.gex}; then
+        if ${libraryTypes.gex}; then
             echo "[gene-expression]\nreference,\$(realpath -s ${gexReference})\ncreate-bam,true" >> multi.csv
         fi
     elif [[ "\$CR_VERSION" == "7" ]]; then
-        if ${library_types.gex}; then
+        if ${libraryTypes.gex}; then
             echo "[gene-expression]\nreference,\$(realpath -s ${gexReference})" >> multi.csv
         fi
     else
@@ -93,18 +100,18 @@ process CELLRANGER_MULTI {
         exit 1
     fi
 
-    if ${library_types.vdj_b || library_types.vdj_t}; then
+    if ${libraryTypes.vdj_b || libraryTypes.vdj_t}; then
         echo "[vdj]\nreference,\$(realpath -s ${vdjReference})" >> multi.csv
     fi
 
-    if ${library_types.feat}; then
+    if ${libraryTypes.feat}; then
         echo "[feature]\nreference,\$(realpath -s ${featureReference})" >> multi.csv
     fi
 
     echo "${libs.join('\n')}" >> multi.csv
 
     # Running CR Multi
-    cellranger multi --csv="multi.csv" --id=${sample.name} --output-dir=output ${cr_args.join(' ')}
+    cellranger multi --csv="multi.csv" --id=${sampleName} --output-dir=output ${cr_args.join(' ')}
 
     # Verify output
     pso="output/outs/per_sample_outs/"
@@ -243,6 +250,7 @@ process KALLISTO_INDEX {
 
     script:
     def fasta_basename = fasta.getBaseName()  // strips .fa/.fasta
+
     """
     kallisto index -i ${fasta_basename}.idx ${fasta}
     """
@@ -300,8 +308,11 @@ workflow SECONDARY_ANALYSIS {
 
     main:
     sample_libs = samples.map { sample ->
-        def libraries = sample.libraries.collect { library -> file(library.path) }
-        tuple(sample, libraries)
+        tuple (
+            sample.libraries.collect { library -> file(library.path) },
+            sample.libraries,
+            sample.name
+        )
     }
 
     CELLRANGER_MULTI (
@@ -314,11 +325,11 @@ workflow SECONDARY_ANALYSIS {
 
     doKallistoWorkflow = !isNullFile(multiCarFasta)
     if (doKallistoWorkflow) {
-        KALLISTO_INDEX(
+        KALLISTO_INDEX (
             multiCarFasta
         )
         
-        KALLISTO_QUANT(
+        KALLISTO_QUANT (
             KALLISTO_INDEX.out,
             getSampleLibraryPaths(samples),
             getSampleNames(samples)
@@ -343,8 +354,8 @@ workflow SECONDARY_ANALYSIS {
             CELLRANGER_MULTI.out.sampleAlignmentsBai.collect(),
             carFasta,
             carGtf,
+            doKallistoWorkflow ? KALLISTO_QUANT.out.collect() : getNullFile(),
             samples.collect(),
-            doKallistoWorkflow ? KALLISTO_QUANT.out.collect() : getNullFile()
         )
 
         QUARTO (
