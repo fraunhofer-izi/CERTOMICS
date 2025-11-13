@@ -113,7 +113,7 @@ workflow QUALITY_CONTROL {
         MULTIQC (
             multiQcConfig,
             skipFastQc ? channel.empty() : FASTQC.out.collect(),
-            skipFastqScreen ? channel.empty() : FASTQ_SCREEN.out.collect()
+            skipFastqScreen ? channel.empty() : FASTQ_SCREEN.out.collect(),
         )
     }
 

@@ -8,43 +8,52 @@ def isNullFile(fileObject) {
     return fileObject.getSimpleName() == 'NO_FILE'
 }
 
-def parseOptionalPath (path) {
-    if (path == null) return getNullFile()
+def parseOptionalPath(path) {
+    if (path == null) {
+        return getNullFile()
+    }
     return file(path, checkIfExists: true)
 }
 
-def getSampleLibraryPaths (sampleList) {
+def getSampleLibraryPaths(sampleList) {
     return sampleList.map { sample -> sample.libraries.collect { library -> library.path } }
 }
 
-def getSampleNames (sampleList) {
+def getSampleNames(sampleList) {
     return sampleList.map { sample -> sample.name }
 }
 
-def getLibraryTypes (libraryList) {
-    boolean gex = false
-    boolean vdj_b = false
-    boolean vdj_t = false
-    boolean feat = false
+def getLibraryTypes(libraryList) {
+    def gex = false
+    def vdj_b = false
+    def vdj_t = false
+    def feat = false
 
-    libraryList.collect { library -> library.type }.unique().each() { type ->
-        if ('Gene Expression'.equals(type)) {
-            gex = true
-        } else if ('VDJ-B'.equals(type)) {
-            vdj_b = true
-        } else if ('VDJ-T'.equals(type)) {
-            vdj_t = true
-        } else if ('Antibody Capture'.equals(type)) {
-            feat = true
-        } else {
-            error "Invalid feature type: ${type}"
+    libraryList
+        .collect { library -> library.type }
+        .unique()
+        .each { type ->
+            if ('Gene Expression'.equals(type)) {
+                gex = true
+            }
+            else if ('VDJ-B'.equals(type)) {
+                vdj_b = true
+            }
+            else if ('VDJ-T'.equals(type)) {
+                vdj_t = true
+            }
+            else if ('Antibody Capture'.equals(type)) {
+                feat = true
+            }
+            else {
+                error("Invalid feature type: ${type}")
+            }
         }
-    }
 
     return [
         'gex': gex,
         'vdj_b': vdj_b,
         'vdj_t': vdj_t,
-        'feat':feat
+        'feat': feat,
     ]
 }

@@ -1,20 +1,20 @@
 #!/usr/bin/env nextflow
 
 include {
-    getNullFile;
-    isNullFile;
-    getLibraryTypes;
-    getSampleLibraryPaths;
+    getNullFile ;
+    isNullFile ;
+    getLibraryTypes ;
+    getSampleLibraryPaths ;
     getSampleNames
 } from '../modules/local/functions'
 
-def getSampleListTypeBits (SampleList)  {
+def getSampleListTypeBits(SampleList) {
     def libraryTypes = getLibraryTypes(SampleList.collect { sample -> sample.libraries }.flatten())
 
-    int type_bits = 0
-    type_bits += libraryTypes.gex ? 1    : 0
-    type_bits += libraryTypes.vdj_b ? 10   : 0
-    type_bits += libraryTypes.vdj_t ? 100  : 0
+    def type_bits = 0
+    type_bits += libraryTypes.gex ? 1 : 0
+    type_bits += libraryTypes.vdj_b ? 10 : 0
+    type_bits += libraryTypes.vdj_t ? 100 : 0
     type_bits += libraryTypes.feat ? 1000 : 0
     return type_bits
 }
@@ -31,11 +31,7 @@ process CELLRANGER_MULTI {
     path gexReference, stageAs: 'references/gex/*', arity: '1'
     path vdjReference, stageAs: 'references/vdj/*', arity: '1'
     path featureReference, stageAs: 'references/feature/*', arity: '1'
-    tuple (
-        path (libraryPaths, stageAs: 'libraries/lib*', arity: '1..*'),
-        val (libraryList),
-        val (sampleName)
-    )
+    tuple path(libraryPaths, stageAs: 'libraries/lib*', arity: '1..*'), val(libraryList), val(sampleName)
 
     output:
     path 'output', emit: full
@@ -49,38 +45,49 @@ process CELLRANGER_MULTI {
 
     script:
     libraryTypes = getLibraryTypes(libraryList)
-    if (isNullFile(gexReference) && libraryTypes.gex)
+    if (isNullFile(gexReference) && libraryTypes.gex) {
         error('Gene expression reference needed but not provided.')
-    if (isNullFile(vdjReference) && (libraryTypes.vdj_b || libraryTypes.vdj_t))
-        error('VDJ reference needed but not provided')
-    if (isNullFile(featureReference) && libraryTypes.feat)
-        error('Feature reference needed but not provided.')
-    
-    libs = ['[libraries]', 'fastq_id,fastqs,feature_types']
-    [libraryList, libraryPaths].transpose().each { libraryObject, libraryPath ->
-        libs.add(
-            [
-                libraryObject.id,
-                "\$(realpath -s ${libraryPath})",
-                libraryObject.type
-            ].join(',')
-        )
     }
+    if (isNullFile(vdjReference) && (libraryTypes.vdj_b || libraryTypes.vdj_t)) {
+        error('VDJ reference needed but not provided')
+    }
+    if (isNullFile(featureReference) && libraryTypes.feat) {
+        error('Feature reference needed but not provided.')
+    }
+
+    libs = ['[libraries]', 'fastq_id,fastqs,feature_types']
+    [libraryList, libraryPaths]
+        .transpose()
+        .each { libraryObject, libraryPath ->
+            libs.add(
+                [
+                    libraryObject.id,
+                    "\$(realpath -s ${libraryPath})",
+                    libraryObject.type,
+                ].join(',')
+            )
+        }
 
     cr_args = params.cellranger_disable_ui ? ['--disable-ui'] : []
     if (params.cellranger_enable_cluster) {
         // cluster mode
-        if (isNullFile(clusterTemplate))
+        if (isNullFile(clusterTemplate)) {
             error('Trying to run CELLRANGER_MULTI process in cluster-mode without cluster template')
+        }
         cr_args += [
             "--jobmode \"\$(realpath ${clusterTemplate})\"",
             "--mempercore ${params.cellranger_mem_per_core}",
-            "--maxjobs ${params.cellranger_max_jobs}"
+            "--maxjobs ${params.cellranger_max_jobs}",
         ]
-    } else {
+    }
+    else {
         // local mode
-        if (task.cpus) cr_args += "--localcores ${task.cpus}"
-        if (task.memory) cr_args += "--localmem ${task.memory.toGiga()}"
+        if (task.cpus) {
+            cr_args += "--localcores ${task.cpus}"
+        }
+        if (task.memory) {
+            cr_args += "--localmem ${task.memory.toGiga()}"
+        }
     }
 
     """
@@ -144,7 +151,7 @@ process SEURAT_OBJECT {
     script:
     libraryTypes = getLibraryTypes(samples.collect { sample -> sample.libraries }.flatten())
     addMatrices = libraryTypes.gex || libraryTypes.feat
-    addRawMatrices = libraryTypes.gex 
+    addRawMatrices = libraryTypes.gex
     addAnnotationB = libraryTypes.vdj_b
     addAnnotationT = libraryTypes.vdj_t
 
@@ -178,7 +185,7 @@ process CAR_METRICS {
     path carGtf, stageAs: 'car.gtf', arity: '1'
     path quantDirs, stageAs: 'quant_dirs/*'
     val samples
-    
+
     output:
     path 'results_metrics_reads_CAR.csv', emit: metrics
     path 'results_coverage_against_CAR.csv', emit: coverage
@@ -215,7 +222,7 @@ process QUARTO {
     path metrics_reads_car, arity: '1'
     path metrics_coverage_car, arity: '1'
     path metrics_coverage_car_unique, arity: '1'
-    val  samples
+    val samples
 
     output:
     path 'metrics_html'
@@ -242,6 +249,7 @@ process QUARTO {
 
 process KALLISTO_INDEX {
     label 'module_kallisto'
+
     input:
     path fasta
 
@@ -249,7 +257,8 @@ process KALLISTO_INDEX {
     path "*.idx"
 
     script:
-    def fasta_basename = fasta.getBaseName()  // strips .fa/.fasta
+    def fasta_basename = fasta.getBaseName()
+    // strips .fa/.fasta
 
     """
     kallisto index -i ${fasta_basename}.idx ${fasta}
@@ -287,58 +296,49 @@ process KALLISTO_QUANT {
 
 workflow SECONDARY_ANALYSIS {
     take:
-    // sample list
     samples
-
-    // paths
     gexReference
     vdjReference
     featureReference
-
-    //CAR references
     carFasta
     carGtf
-    
-     // for kallisto indexing & quantification
     multiCarFasta
     scGateModel
-
-    // misc
     cellrangerClusterTemplate
 
     main:
     sample_libs = samples.map { sample ->
-        tuple (
+        tuple(
             sample.libraries.collect { library -> file(library.path) },
             sample.libraries,
-            sample.name
+            sample.name,
         )
     }
 
-    CELLRANGER_MULTI (
+    CELLRANGER_MULTI(
         cellrangerClusterTemplate,
         gexReference,
         vdjReference,
         featureReference,
-        sample_libs
+        sample_libs,
     )
 
     doKallistoWorkflow = !isNullFile(multiCarFasta)
     if (doKallistoWorkflow) {
-        KALLISTO_INDEX (
+        KALLISTO_INDEX(
             multiCarFasta
         )
-        
-        KALLISTO_QUANT (
+
+        KALLISTO_QUANT(
             KALLISTO_INDEX.out,
             getSampleLibraryPaths(samples),
-            getSampleNames(samples)
+            getSampleNames(samples),
         )
     }
 
     doCarWorkflow = !isNullFile(carFasta) && !isNullFile(carGtf)
     if (doCarWorkflow) {
-        SEURAT_OBJECT (
+        SEURAT_OBJECT(
             projectDir.resolve('bin/helper_functions.R'),
             CELLRANGER_MULTI.out.featureBcMatrix.collect(),
             CELLRANGER_MULTI.out.rawFeatureBcMatrix.collect(),
@@ -346,10 +346,10 @@ workflow SECONDARY_ANALYSIS {
             CELLRANGER_MULTI.out.vdjBAnnotations.collect(),
             carGtf,
             samples.collect(),
-            scGateModel
+            scGateModel,
         )
 
-        CAR_METRICS (
+        CAR_METRICS(
             CELLRANGER_MULTI.out.sampleAlignmentsBam.collect(),
             CELLRANGER_MULTI.out.sampleAlignmentsBai.collect(),
             carFasta,
@@ -358,7 +358,7 @@ workflow SECONDARY_ANALYSIS {
             samples.collect(),
         )
 
-        QUARTO (
+        QUARTO(
             CAR_METRICS.out.kallistoMatrix,
             projectDir.resolve('bin/CAR_plot.qmd'),
             projectDir.resolve('bin/CAR_quality_plot.py'),
@@ -368,7 +368,7 @@ workflow SECONDARY_ANALYSIS {
             CAR_METRICS.out.metrics,
             CAR_METRICS.out.coverage,
             CAR_METRICS.out.uniqueCoverage,
-            samples.collect()
+            samples.collect(),
         )
     }
 
