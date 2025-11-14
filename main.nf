@@ -66,6 +66,7 @@ workflow ANALYSIS {
         // Run QC
         QUALITY_CONTROL(
             samples,
+            SECONDARY_ANALYSIS.out.cellranger_web_summary,
             params.skip_fastqc,
             params.skip_fastq_screen,
             params.skip_multiqc,
