@@ -1,14 +1,18 @@
 #!/usr/bin/env nextflow
-include { validateParameters; paramsSummaryLog; samplesheetToList } from 'plugin/nf-schema'
-include { getNullFile; isNullFile; parseOptionalPath } from './modules/local/functions'
+include { validateParameters ; paramsSummaryLog ; samplesheetToList } from 'plugin/nf-schema'
+include { getNullFile ; isNullFile ; parseOptionalPath } from './modules/local/functions'
 
 include { BUILD_CUSTOM_REFERENCE } from './workflows/handle_references'
 include { SECONDARY_ANALYSIS } from './workflows/secondary_analysis'
 include { QUALITY_CONTROL } from './workflows/quality_control'
 
-def handleSourceUrls (sourceFile, sourceUrl, sourceUrlFallback) {
-    if (sourceFile) return channel.fromPath(sourceFile, checkIfExists: true)
-    if (sourceUrl) return channel.fromPath(sourceUrl)
+def handleSourceUrls(sourceFile, sourceUrl, sourceUrlFallback) {
+    if (sourceFile) {
+        return channel.fromPath(sourceFile, checkIfExists: true)
+    }
+    if (sourceUrl) {
+        return channel.fromPath(sourceUrl)
+    }
     return channel.fromPath(sourceUrlFallback)
 }
 
@@ -21,12 +25,12 @@ workflow REFERENCE {
     carGtf
 
     main:
-    BUILD_CUSTOM_REFERENCE (
+    BUILD_CUSTOM_REFERENCE(
         referenceVersion,
         sourceFasta,
         sourceGtf,
         carFasta,
-        carGtf
+        carGtf,
     )
 
     emit:
@@ -46,7 +50,7 @@ workflow ANALYSIS {
     cellrangerClusterTemplate
 
     main:
-    SECONDARY_ANALYSIS (
+    SECONDARY_ANALYSIS(
         samples,
         gexReference,
         vdjReference,
@@ -55,13 +59,14 @@ workflow ANALYSIS {
         carGtf,
         multiCarFasta,
         scGateModel,
-        cellrangerClusterTemplate
+        cellrangerClusterTemplate,
     )
 
     if (!params.skip_qc) {
         // Run QC
-        QUALITY_CONTROL (
+        QUALITY_CONTROL(
             samples,
+            SECONDARY_ANALYSIS.out.cellranger_web_summary,
             params.skip_fastqc,
             params.skip_fastq_screen,
             params.skip_multiqc,
@@ -74,27 +79,28 @@ workflow ANALYSIS {
 workflow {
     // validation and Help message
     validateParameters()
-    log.info paramsSummaryLog(workflow)
+    log.info(paramsSummaryLog(workflow))
 
     // read samples
     samples = channel.empty()
     if (params.samplesheet) {
         samples = channel.fromList(
-            samplesheetToList(
-                params.samplesheet,
-                projectDir.resolve('assets/schemas/samples.json')
+                samplesheetToList(
+                    params.samplesheet,
+                    projectDir.resolve('assets/schemas/samples.json'),
+                )
             )
-        ).map { sampleName, libraries ->
-            Sample.create(
-                sampleName,
-                libraries.collect { id, path, type -> ['fastq_id': id, 'fastqs': path, 'feature_types': type] }
-            )
-        }
+            .map { sampleName, libraries ->
+                Sample.create(
+                    sampleName,
+                    libraries.collect { id, path, type -> ['fastq_id': id, 'fastqs': path, 'feature_types': type] },
+                )
+            }
     }
-    
+
     urlMap = samplesheetToList(
         projectDir.resolve('assets/reference_source_urls.yaml'),
-        projectDir.resolve('assets/schemas/reference_source_urls.json')
+        projectDir.resolve('assets/schemas/reference_source_urls.json'),
     ).collectEntries { version, fa, gtf -> [(version): ['fa': fa, 'gtf': gtf]] }
 
     // check / update parameters
@@ -115,13 +121,13 @@ workflow {
     gexSourceFasta = handleSourceUrls(
         params.gene_expression_source_fa,
         params.gene_expression_source_fa_url,
-        urlMap[referenceVersion].fa
+        urlMap[referenceVersion].fa,
     )
 
-    gexSourceGtf = handleSourceUrls (
+    gexSourceGtf = handleSourceUrls(
         params.gene_expression_source_gtf,
         params.gene_expression_source_gtf_url,
-        urlMap[referenceVersion].gtf
+        urlMap[referenceVersion].gtf,
     )
 
     // misc
@@ -130,15 +136,17 @@ workflow {
 
     if (params.pipeline_mode == null) {
         error('Parameter "pipeline_mode" cannot be null.')
-    } else if (params.pipeline_mode == 'reference') {
-        REFERENCE (
+    }
+    else if (params.pipeline_mode == 'reference') {
+        REFERENCE(
             referenceVersion,
             gexSourceFasta,
             gexSourceGtf,
             gexCarFasta,
-            gexCarGtf
+            gexCarGtf,
         )
-    } else if (params.pipeline_mode == 'analysis') {
+    }
+    else if (params.pipeline_mode == 'analysis') {
         ANALYSIS(
             samples,
             gexReference,
@@ -148,23 +156,24 @@ workflow {
             gexCarGtf,
             multiCarFasta,
             params.scGate_model,
-            cellrangerClusterTemplate
+            cellrangerClusterTemplate,
         )
-    } else if (params.pipeline_mode == 'full') {
+    }
+    else if (params.pipeline_mode == 'full') {
         doBuildReference = isNullFile(gexReference) && samples.collect { sample -> sample.hasGeneExpressionLibrary() }.any()
         if (doBuildReference) {
-            REFERENCE (
+            REFERENCE(
                 referenceVersion,
                 gexSourceFasta,
                 gexSourceGtf,
                 gexCarFasta,
-                gexCarGtf
+                gexCarGtf,
             )
 
             gexReference = REFERENCE.out.reference.first()
         }
 
-        ANALYSIS (
+        ANALYSIS(
             samples,
             gexReference,
             vdjReference,
@@ -173,9 +182,10 @@ workflow {
             gexCarGtf,
             multiCarFasta,
             params.scGate_model,
-            cellrangerClusterTemplate
+            cellrangerClusterTemplate,
         )
-    } else {
+    }
+    else {
         error("Unknown pipeline mode: '${params.pipeline_mode}'")
     }
 }

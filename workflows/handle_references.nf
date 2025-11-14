@@ -33,7 +33,7 @@ process BUILD_REFERENCE {
     publishDir "${params.outdir}/gene_expression_reference"
     label 'module_cellranger'
     label 'big_task'
-   
+
     input:
     path sourceFasta, stageAs: 'src/fa/*', arity: '1'
     path sourceGtf, stageAs: 'src/gtf/*', arity: '1'
@@ -56,7 +56,8 @@ process BUILD_REFERENCE {
             ${task.cpus ? task.cpus : 0} \
             ${task.memory ? task.memory.toGiga() : 0}
         """
-    } else if (referenceVersion == '2024') {
+    }
+    else if (referenceVersion == '2024') {
         """
         bash build_reference_2024.sh \
             ${sourceFasta} \
@@ -66,7 +67,8 @@ process BUILD_REFERENCE {
             ${task.cpus ? task.cpus : 0} \
             ${task.memory ? task.memory.toGiga() : 0}
         """
-    } else {
+    }
+    else {
         error("'invalid reference version: ${referenceVersion}")
     }
 }
@@ -80,17 +82,17 @@ workflow BUILD_CUSTOM_REFERENCE {
     carGtf
 
     main:
-    PREPARE_SOURCE_FILES (
+    PREPARE_SOURCE_FILES(
         sourceFasta,
-        sourceGtf
+        sourceGtf,
     )
 
-    BUILD_REFERENCE (
+    BUILD_REFERENCE(
         PREPARE_SOURCE_FILES.out.fa,
         PREPARE_SOURCE_FILES.out.gtf,
         carFasta,
         carGtf,
-        referenceVersion
+        referenceVersion,
     )
 
     emit:

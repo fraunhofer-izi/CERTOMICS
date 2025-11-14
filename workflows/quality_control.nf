@@ -69,15 +69,16 @@ process MULTIQC {
 
     input:
     path multiQcConfig, stageAs: 'multiqc_config', arity: '1'
-    path fastQcReports, stageAs: 'fastqc/*', arity: '0..*'
-    path fastqScreenReports, stageAs: 'fastq_screen/*', arity: '0..*'
+    path fastQcReports, stageAs: 'reports/fastqc?/*', arity: '0..*'
+    path fastqScreenReports, stageAs: 'reports/fastq_screen?/*', arity: '0..*'
+    path cellRangerReports, stageAs: 'reports/cellranger?/*', arity: '0..*'
     
     output:
     path 'multiqc'
 
     script:
     """
-    multiqc ${fastQcReports} ${fastqScreenReports} --config ${multiQcConfig} -o multiqc
+    multiqc ${cellRangerReports} ${fastQcReports} ${fastqScreenReports} --config ${multiQcConfig} -o multiqc
     """
 }
 
@@ -85,6 +86,7 @@ workflow QUALITY_CONTROL {
     take:
     // samples
     samples
+    cellrangerReports
 
     // booleans
     skipFastQc
@@ -113,7 +115,8 @@ workflow QUALITY_CONTROL {
         MULTIQC (
             multiQcConfig,
             skipFastQc ? channel.empty() : FASTQC.out.collect(),
-            skipFastqScreen ? channel.empty() : FASTQ_SCREEN.out.collect()
+            skipFastqScreen ? channel.empty() : FASTQ_SCREEN.out.collect(),
+            cellrangerReports.collect(),
         )
     }
 
