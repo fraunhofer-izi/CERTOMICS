@@ -47,6 +47,7 @@ workflow ANALYSIS {
     carGtf
     multiCarFasta
     scGateModel
+    fastqScreenDatabases
     cellrangerClusterTemplate
 
     main:
@@ -70,7 +71,7 @@ workflow ANALYSIS {
             params.skip_fastqc,
             params.skip_fastq_screen,
             params.skip_multiqc,
-            params.fastq_screen_config,
+            fastqScreenDatabases,
             params.multiqc_config,
         )
     }
@@ -94,6 +95,24 @@ workflow {
                 Sample.create(
                     sampleName,
                     libraries.collect { id, path, type -> ['fastq_id': id, 'fastqs': path, 'feature_types': type] },
+                )
+            }
+    }
+
+    fastqScreenDatabases = channel.empty()
+    if (true) {
+        fastqScreenDatabases = channel.fromList(
+                samplesheetToList(
+                    projectDir.resolve('assets/fastq_screen_databases.yaml'),
+                    projectDir.resolve('assets/schemas/fastq_screen_databases.json'),
+                )
+            )
+            .map { name, path ->
+                def fileObject = file(path.startsWith('/') ? path : projectDir.resolve(path))
+                tuple(
+                    name,
+                    fileObject.parent,
+                    fileObject.baseName,
                 )
             }
     }
@@ -156,6 +175,7 @@ workflow {
             gexCarGtf,
             multiCarFasta,
             params.scGate_model,
+            fastqScreenDatabases,
             cellrangerClusterTemplate,
         )
     }
@@ -182,6 +202,7 @@ workflow {
             gexCarGtf,
             multiCarFasta,
             params.scGate_model,
+            fastqScreenDatabases,
             cellrangerClusterTemplate,
         )
     }
