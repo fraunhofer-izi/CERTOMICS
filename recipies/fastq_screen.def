@@ -9,7 +9,7 @@ From: debian:bookworm-slim
     export PATH="/usr/local/bin:$PATH"
 
 %files
-    ../assets/config/fastqs_config2.conf /fastq_screen/fastq_screen.conf
+    ../assets/config/fastqs_config.conf /fastq_screen/fastq_screen.conf
     ../assets/fastqs_databases/ /fastq_screen/
 
 %post
@@ -43,4 +43,3 @@ From: debian:bookworm-slim
     BASH_VERSION=$(bash --version | head -n 1 | awk '{print $4}' | cut -d. -f1)
     [ "$BASH_VERSION" -gt 3 ]  || { echo "bash version $BASH_VERSION is too old. Expecting 3.x or later"; exit 1; }
     [ -x /bin/bash ]           || { echo "bash is not in /bin/bash or /usr/bin/bash"; exit 1; }
-    
