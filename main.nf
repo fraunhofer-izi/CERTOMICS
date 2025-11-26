@@ -70,7 +70,6 @@ workflow ANALYSIS {
             params.skip_fastqc,
             params.skip_fastq_screen,
             params.skip_multiqc,
-            params.fastq_screen_config,
             params.multiqc_config,
         )
     }
