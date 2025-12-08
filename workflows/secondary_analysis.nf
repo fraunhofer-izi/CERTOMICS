@@ -176,6 +176,7 @@ process SEURAT_OBJECT {
 }
 
 process CAR_METRICS {
+    publishDir "${params.outdir}/car_metrics"
     label 'module_python3'
 
     input:
@@ -183,14 +184,12 @@ process CAR_METRICS {
     path sampleAlignmentBais, stageAs: 'bams*/', arity: '1..*'
     path carFasta, stageAs: 'car.fa', arity: '1'
     path carGtf, stageAs: 'car.gtf', arity: '1'
-    path quantDirs, stageAs: 'quant_dirs/*'
     val samples
 
     output:
     path 'results_metrics_reads_CAR.csv', emit: metrics
     path 'results_coverage_against_CAR.csv', emit: coverage
     path 'results_coverage_against_CAR_unique.csv', emit: uniqueCoverage
-    path "CAR_est_counts_matrix.csv", optional: true, emit: kallistoMatrix
 
     script:
     """
@@ -199,12 +198,6 @@ process CAR_METRICS {
         --bam_files ${sampleAlignmentBams.join(' ')} \
         --CAR_fasta_file ${carFasta} \
         --CAR_gtf_file ${carGtf}
-
-    if ${!isNullFile(quantDirs)}; then
-        Kallisto_Comparisons.py \
-            --input-dir ${quantDirs.join(' ')} \
-            --output CAR_est_counts_matrix.csv
-    fi
     """
 }
 
@@ -228,10 +221,12 @@ process QUARTO {
     path 'metrics_html'
 
     script:
+    // what to do in case kallisto_matrix = nullfile?
+
     """
     export HOME=\$(realpath "quarto-cache")
     quarto render ${car_plot_qmd} \
-        -P kallisto_matrix:${kallisto_matrix} \
+        -P kallisto_matrix:${isNullFile(kallisto_matrix) ? "" : kallisto_matrix} \
         -P seurat_object:"${seurat_object}" \
         -P gtf:"${annotation}" \
         -P results_metrics_reads_CAR:"${metrics_reads_car}" \
@@ -246,7 +241,6 @@ process QUARTO {
     """
 }
 
-
 process KALLISTO_INDEX {
     label 'module_kallisto'
 
@@ -257,40 +251,52 @@ process KALLISTO_INDEX {
     path "*.idx"
 
     script:
-    def fasta_basename = fasta.getBaseName()
-    // strips .fa/.fasta
-
     """
-    kallisto index -i ${fasta_basename}.idx ${fasta}
+    kallisto index -i \$(basename ${fasta}).idx ${fasta}
     """
 }
 
 process KALLISTO_QUANT {
     label 'module_kallisto'
     fair true
+    tag "${sampleName}"
 
     input:
     path index_file
-    path libraries, stageAs: 'library', arity: '1..*'
-    val sample_name
+    tuple path(gexLibrary, stageAs: 'library/*'), val(sampleName)
 
     output:
-    path "quant_${sample_name}"
+    path "quant_${sampleName}"
 
     script:
     """
-    echo "Running kallisto for ${sample_name}"
-
-    READS=\$(for lib in library*; do find -L "\$lib" -type f -name '*_R_*R2_*.fastq.gz' | head -n 1; done | sort | tr '\\n' ' ')
-
+    echo "Running kallisto for ${sampleName}"
+    READS=\$(find -L "${gexLibrary}" -type f -name '*R2_*.fastq.gz')
     echo "Using reads: \$READS"
 
     kallisto quant \\
         -i ${index_file} \\
-        -o quant_${sample_name} \\
+        -o quant_${sampleName} \\
         --single -l 350 -s 50 \\
         --single-overhang \\
         \$READS
+    """
+}
+
+process KALLISTO_COMPARISONS {
+    label 'module_python3'
+
+    input:
+    path quantDirs, stageAs: 'quant_dirs/*'
+
+    output:
+    path "CAR_est_counts_matrix.csv"
+
+    script:
+    """
+    Kallisto_Comparisons.py \
+        --input-dir ${quantDirs.join(' ')} \
+        --output CAR_est_counts_matrix.csv
     """
 }
 
@@ -309,7 +315,7 @@ workflow SECONDARY_ANALYSIS {
     main:
     sample_libs = samples.map { sample ->
         tuple(
-            sample.libraries.collect { library -> file(library.path) },
+            sample.libraries.collect { library -> library.path },
             sample.libraries,
             sample.name,
         )
@@ -325,14 +331,22 @@ workflow SECONDARY_ANALYSIS {
 
     doKallistoWorkflow = !isNullFile(multiCarFasta)
     if (doKallistoWorkflow) {
-        KALLISTO_INDEX(
-            multiCarFasta
-        )
+        kallistoInput = samples.map { sample ->
+            tuple(
+                sample.libraries.find { library -> library.type == 'Gene Expression' }.path,
+                sample.name,
+            )
+        }
+
+        KALLISTO_INDEX(multiCarFasta)
 
         KALLISTO_QUANT(
             KALLISTO_INDEX.out,
-            getSampleLibraryPaths(samples),
-            getSampleNames(samples),
+            kallistoInput,
+        )
+
+        KALLISTO_COMPARISONS(
+            KALLISTO_QUANT.out.collect()
         )
     }
 
@@ -354,12 +368,11 @@ workflow SECONDARY_ANALYSIS {
             CELLRANGER_MULTI.out.sampleAlignmentsBai.collect(),
             carFasta,
             carGtf,
-            doKallistoWorkflow ? KALLISTO_QUANT.out.collect() : getNullFile(),
             samples.collect(),
         )
 
         QUARTO(
-            CAR_METRICS.out.kallistoMatrix,
+            doKallistoWorkflow ? KALLISTO_COMPARISONS.out : getNullFile(),
             projectDir.resolve('bin/CAR_plot.qmd'),
             projectDir.resolve('bin/CAR_quality_plot.py'),
             projectDir.resolve('bin/helper_functions.R'),

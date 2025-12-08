@@ -1,6 +1,6 @@
 #!/usr/bin/env nextflow
 
-include { isNullFile; getNullFile } from '../modules/local/functions'
+include { isNullFile ; getNullFile } from '../modules/local/functions'
 
 process FASTQC {
     publishDir "${params.outdir}/fastqc/${task.tag}"
@@ -8,24 +8,20 @@ process FASTQC {
     tag "${sampleName}"
 
     input:
-    path fastqPaths, stageAs: 'fastq', arity: '1..*'
-    val fastqIds
-    val sampleName
+    tuple path(libraries, stageAs: 'library*/', arity: '1..*'), val(libraryIds), val(sampleName)
 
     output:
     path "fastqc"
 
     script:
-    libraries = []
-    fastqPaths.eachWithIndex { directory, index ->
-        libraries.add(
-            directory.resolve("${fastqIds[index]}_*")
-        )
-    }
-
     """
     mkdir "fastqc"
-    fastqc -o "fastqc" --noextract --threads ${task.cpus} ${libraries.join(' ')}
+    fastq_files=\$(find -L ${libraries} -type f -regextype posix-extended -regex '.*\\.(fastq|fq)(\\.gz)?\$')
+    echo "Running fastqc for \$fastq_files"
+    fastqc -o "fastqc" \
+        --noextract \
+        --threads ${task.cpus} \
+        \$fastq_files
     """
 }
 
@@ -35,26 +31,14 @@ process FASTQ_SCREEN {
     tag "${sampleName}"
 
     input:
-    path fastqPaths, stageAs: 'fastq', arity: '1..*'
-    val fastqIds
-    val fastqTypes
-    val sampleName
+    tuple path(gexLibrary, stageAs: 'library'), val(fastqId), val(sampleName)
 
     output:
     path "fastqs"
 
     script:
-    libraries = []
-    fastqPaths.eachWithIndex { directory, index ->
-        if ('Gene Expression'.equals(fastqTypes[index])) {
-            libraries.add(
-                directory.resolve("${fastqIds[index]}_*")
-            )
-        }
-    }
-
     """
-    fastq_screen ${libraries.join(' ')} \
+    fastq_screen ${gexLibrary}/${fastqId}* \
         --threads ${task.cpus} \
         --outdir fastqs \
         --aligner bowtie2
@@ -90,22 +74,28 @@ workflow QUALITY_CONTROL {
     multiQcConfig
 
     main:
-    pathCh = samples.map { sample -> sample.libraries.collect { library -> library.path } }
-    typeCh = samples.map { sample -> sample.libraries.collect { library -> library.type } }
-    idCh = samples.map { sample -> sample.libraries.collect { library -> library.id } }
-    nameCh = samples.map { sample -> sample.name }
-
     if (!skipFastQc) {
-        FASTQC(pathCh, idCh, nameCh)
+        fastqcInput = samples.map { sample ->
+            tuple(
+                sample.libraries.collect { library -> library.path },
+                sample.libraries.collect { library -> library.id },
+                sample.name,
+            )
+        }
+
+        FASTQC(fastqcInput)
     }
 
     if (!skipFastqScreen) {
-        FASTQ_SCREEN(
-            pathCh,
-            idCh,
-            typeCh,
-            nameCh
-        )
+        fastqScreenInput = samples.map { sample ->
+            tuple(
+                sample.libraries.find { library -> library.type == 'Gene Expression' }.path,
+                sample.libraries.find { library -> library.type == 'Gene Expression' }.id,
+                sample.name,
+            )
+        }
+
+        FASTQ_SCREEN(fastqScreenInput)
     }
 
     if (!skipMultiQc) {
