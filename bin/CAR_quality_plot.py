@@ -242,7 +242,7 @@ def interactive_coverage_plot(samples, cov_all, cov_unique, gtf_path_car, output
             x=-0.095,
             y=0.5,
             text=sample,
-            textangle=-90,
+            textangle=-45,
             showarrow=False,
             xanchor="center"
         )
@@ -316,6 +316,7 @@ def plot_read_metrices(read_metrics):
     # Extract unique samples
     samples = list(read_metrics.keys())
     bar_plot(read_metrics, samples)
+    return samples
 
 def bar_plot(read_metrics, samples):
     """
