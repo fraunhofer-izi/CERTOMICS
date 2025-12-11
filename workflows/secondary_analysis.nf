@@ -206,7 +206,7 @@ process QUARTO {
     label 'module_quarto'
 
     input:
-    path kallisto_matrix, arity: '0..*'
+    path kallisto_matrix, arity: '1'
     path car_plot_qmd, arity: '1'
     path car_quality_plot_py, arity: '1'
     path helper_functions, arity: '1'
@@ -221,8 +221,6 @@ process QUARTO {
     path 'metrics_html'
 
     script:
-    // what to do in case kallisto_matrix = nullfile?
-
     """
     export HOME=\$(realpath "quarto-cache")
     quarto render ${car_plot_qmd} \
