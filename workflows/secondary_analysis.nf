@@ -1,40 +1,21 @@
 #!/usr/bin/env nextflow
 
-def get_library_types (library_list) {
-    def library_types = library_list.collect { library -> library.type }.unique()
-    
-    boolean gex = false
-    boolean vdj_b = false
-    boolean vdj_t = false
-    boolean feat = false
+include {
+    getNullFile ;
+    isNullFile ;
+    getLibraryTypes ;
+    getSampleLibraryPaths ;
+    getSampleNames
+} from '../modules/local/functions'
 
-    library_types.each() { type ->
-        if ('Gene Expression'.equals(type)) {
-            gex = true
-        } else if ('VDJ-B'.equals(type)) {
-            vdj_b = true
-        } else if ('VDJ-T'.equals(type)) {
-            vdj_t = true
-        } else if ('Antibody Capture'.equals(type)) {
-            feat = true
-        } else {
-            error "Invalid feature type: ${type}"
-        }
-    }
+def getSampleListTypeBits(SampleList) {
+    def libraryTypes = getLibraryTypes(SampleList.collect { sample -> sample.libraries }.flatten())
 
-    return [gex, vdj_b, vdj_t, feat]
-}
-
-
-
-def get_sample_list_type_bits (sample_list)  {
-    def library_types = get_library_types(sample_list.collect { sample -> sample.libraries }.flatten() )
-    
-    int type_bits = 0
-    type_bits += library_types[0] ? 1    : 0
-    type_bits += library_types[1] ? 10   : 0
-    type_bits += library_types[2] ? 100  : 0
-    type_bits += library_types[3] ? 1000 : 0
+    def type_bits = 0
+    type_bits += libraryTypes.gex ? 1 : 0
+    type_bits += libraryTypes.vdj_b ? 10 : 0
+    type_bits += libraryTypes.vdj_t ? 100 : 0
+    type_bits += libraryTypes.feat ? 1000 : 0
     return type_bits
 }
 
@@ -43,48 +24,70 @@ process CELLRANGER_MULTI {
     label 'module_cellranger'
     label 'big_task'
     fair true
-    tag "${sample.name}"
+    tag "${sampleName}"
 
     input:
-    path cluster_template, arity: '1'
-    path libraries, stageAs: 'library', arity: '1..*'
-    path gex_reference, stageAs: 'gex_reference'
-    path vdj_reference, stageAs: 'vdj_reference'
-    path feat_reference, stageAs: 'feat_reference'
-    val  sample
+    path clusterTemplate, stageAs: 'cluster/*', arity: '1'
+    path gexReference, stageAs: 'references/gex/*', arity: '1'
+    path vdjReference, stageAs: 'references/vdj/*', arity: '1'
+    path featureReference, stageAs: 'references/feature/*', arity: '1'
+    tuple path(libraryPaths, stageAs: 'libraries/lib*', arity: '1..*'), val(libraryList), val(sampleName)
 
     output:
     path 'output', emit: full
-    path 'output/outs/per_sample_outs/*/web_summary.html', emit: web_summary
-    path 'output/outs/per_sample_outs/*/count/sample_alignments.bam', emit: sample_alignments_bam
-    path 'output/outs/per_sample_outs/*/count/sample_alignments.bam.bai', emit: sample_alignments_bai
-    path 'output/outs/per_sample_outs/*/count/sample_filtered_feature_bc_matrix', emit: feature_bc_matrix, optional: true
-    path 'output/outs/multi/count/raw_feature_bc_matrix', emit: feature_raw_bc_matrix, optional: true
-    path 'output/outs/per_sample_outs/*/vdj_t/filtered_contig_annotations.csv', emit: vdj_t_annotations, optional: true
-    path 'output/outs/per_sample_outs/*/vdj_b/filtered_contig_annotations.csv', emit: vdj_b_annotations, optional: true
-    val  sample.name, emit: sample_name
+    path 'output/outs/per_sample_outs/*/web_summary.html', emit: webSummary
+    path 'output/outs/per_sample_outs/*/count/sample_alignments.bam', emit: sampleAlignmentsBam
+    path 'output/outs/per_sample_outs/*/count/sample_alignments.bam.bai', emit: sampleAlignmentsBai
+    path 'output/outs/per_sample_outs/*/count/sample_filtered_feature_bc_matrix', emit: featureBcMatrix, optional: true
+    path 'output/outs/multi/count/raw_feature_bc_matrix', emit: rawFeatureBcMatrix, optional: true
+    path 'output/outs/per_sample_outs/*/vdj_t/filtered_contig_annotations.csv', emit: vdjTAnnotations, optional: true
+    path 'output/outs/per_sample_outs/*/vdj_b/filtered_contig_annotations.csv', emit: vdjBAnnotations, optional: true
 
     script:
-    types = get_library_types(sample.libraries)
-    libs = ['[libraries]', 'fastq_id,fastqs,feature_types']
-    
-    // using ${libraries[index]} instead of ${library.path} to get staged path
-    sample.libraries.eachWithIndex { library, index ->
-        libs.add([library.id, "\$(realpath -s ${libraries[index]})", library.type].join(','))
+    libraryTypes = getLibraryTypes(libraryList)
+    if (isNullFile(gexReference) && libraryTypes.gex) {
+        error('Gene expression reference needed but not provided.')
+    }
+    if (isNullFile(vdjReference) && (libraryTypes.vdj_b || libraryTypes.vdj_t)) {
+        error('VDJ reference needed but not provided')
+    }
+    if (isNullFile(featureReference) && libraryTypes.feat) {
+        error('Feature reference needed but not provided.')
     }
 
+    libs = ['[libraries]', 'fastq_id,fastqs,feature_types']
+    [libraryList, libraryPaths]
+        .transpose()
+        .each { libraryObject, libraryPath ->
+            libs.add(
+                [
+                    libraryObject.id,
+                    "\$(realpath -s ${libraryPath})",
+                    libraryObject.type,
+                ].join(',')
+            )
+        }
+
     cr_args = params.cellranger_disable_ui ? ['--disable-ui'] : []
-    if (params.cellranger_enable_cluster && cluster_template) {
+    if (params.cellranger_enable_cluster) {
         // cluster mode
+        if (isNullFile(clusterTemplate)) {
+            error('Trying to run CELLRANGER_MULTI process in cluster-mode without cluster template')
+        }
         cr_args += [
-            "--jobmode \"\$(realpath ${cluster_template})\"",
+            "--jobmode \"\$(realpath ${clusterTemplate})\"",
             "--mempercore ${params.cellranger_mem_per_core}",
-            "--maxjobs ${params.cellranger_max_jobs}"
+            "--maxjobs ${params.cellranger_max_jobs}",
         ]
-    } else {
+    }
+    else {
         // local mode
-        if (task.cpus) cr_args += "--localcores ${task.cpus}"
-        if (task.memory) cr_args += "--localmem ${task.memory.toGiga()}"
+        if (task.cpus) {
+            cr_args += "--localcores ${task.cpus}"
+        }
+        if (task.memory) {
+            cr_args += "--localmem ${task.memory.toGiga()}"
+        }
     }
 
     """
@@ -92,30 +95,30 @@ process CELLRANGER_MULTI {
     touch multi.csv
     CR_VERSION=\$(cellranger --version | sed -n 's/.*cellranger-\\([0-9]\\+\\).*/\\1/p')
     if [[ "\$CR_VERSION" == "8" ]]; then
-        if ${types[0]}; then
-            echo "[gene-expression]\nreference,\$(realpath -s ${gex_reference})\ncreate-bam,true" >> multi.csv
+        if ${libraryTypes.gex}; then
+            echo "[gene-expression]\nreference,\$(realpath -s ${gexReference})\ncreate-bam,true" >> multi.csv
         fi
     elif [[ "\$CR_VERSION" == "7" ]]; then
-        if ${types[0]}; then
-            echo "[gene-expression]\nreference,\$(realpath -s ${gex_reference})" >> multi.csv
+        if ${libraryTypes.gex}; then
+            echo "[gene-expression]\nreference,\$(realpath -s ${gexReference})" >> multi.csv
         fi
     else
         echo "Unsupported cellranger version: \$CR_VERSION"
         exit 1
     fi
 
-    if ${types[1] || types[2]}; then
-        echo "[vdj]\nreference,\$(realpath -s ${vdj_reference})" >> multi.csv
+    if ${libraryTypes.vdj_b || libraryTypes.vdj_t}; then
+        echo "[vdj]\nreference,\$(realpath -s ${vdjReference})" >> multi.csv
     fi
 
-    if ${types[3]}; then
-        echo "[feature]\nreference,\$(realpath -s ${feat_reference})" >> multi.csv
+    if ${libraryTypes.feat}; then
+        echo "[feature]\nreference,\$(realpath -s ${featureReference})" >> multi.csv
     fi
 
     echo "${libs.join('\n')}" >> multi.csv
 
     # Running CR Multi
-    cellranger multi --csv="multi.csv" --id=${sample.name} --output-dir=output ${cr_args.join(' ')}
+    cellranger multi --csv="multi.csv" --id=${sampleName} --output-dir=output ${cr_args.join(' ')}
 
     # Verify output
     pso="output/outs/per_sample_outs/"
@@ -133,77 +136,68 @@ process SEURAT_OBJECT {
     label 'big_task'
 
     input:
-    path helper_functions_script, arity: '1'
-    path feature_bc_matrices, stageAs: 'feature_bc_matrix', arity: '1..*'
-    path feature_raw_bc_matrix, stageAs: 'feature_raw_bc_matrix', arity: '1..*'
-    path vdj_t_annotations, stageAs: 'vdj_t_annotation', arity: '1..*'
-    path vdj_b_annotations, stageAs: 'vdj_b_annotation', arity: '1..*'
+    path helperFunctionsScript, arity: '1'
+    path featureBcMatrices, stageAs: 'feature_bc_matrix', arity: '1..*'
+    path rawFeatureBcMatrices, stageAs: 'feature_raw_bc_matrix', arity: '1..*'
+    path vdjTAnnotations, stageAs: 'vdj_t_annotation', arity: '1..*'
+    path vdjBAnnotations, stageAs: 'vdj_b_annotation', arity: '1..*'
     path annotation, stageAs: 'annotation.gtf', arity: '1'
     val samples
-    val scGate_model
+    val scGateModel
 
     output:
     path 'seurat_object.rds'
 
     script:
-    library_types = get_library_types(samples.collect { sample -> sample.libraries }.flatten() )
-    add_matrices = library_types[0] || library_types[3]
-    add_raw_matrices = library_types[0] 
-    add_annotation_b = library_types[1]
-    add_annotation_t = library_types[2]
+    libraryTypes = getLibraryTypes(samples.collect { sample -> sample.libraries }.flatten())
+    addMatrices = libraryTypes.gex || libraryTypes.feat
+    addRawMatrices = libraryTypes.gex
+    addAnnotationB = libraryTypes.vdj_b
+    addAnnotationT = libraryTypes.vdj_t
 
-    matrices = add_matrices ? feature_bc_matrices.join(',') : 'none'
-    matrices_raw = add_raw_matrices ? feature_raw_bc_matrix.join(',') : 'none'
-    annotation_t = add_annotation_t ? vdj_t_annotations.join(',') : 'none'
-    annotation_b = add_annotation_b ? vdj_b_annotations.join(',') : 'none'
+    matrices = addMatrices ? featureBcMatrices.join(',') : 'none'
+    matricesRaw = addRawMatrices ? rawFeatureBcMatrices.join(',') : 'none'
+    annotationT = addAnnotationT ? vdjTAnnotations.join(',') : 'none'
+    annotationB = addAnnotationB ? vdjBAnnotations.join(',') : 'none'
 
     """
     build_seurat_objects.R \
-        ${helper_functions_script} \
+        ${helperFunctionsScript} \
         ${matrices} \
-        ${matrices_raw} \
-        ${annotation_t} \
-        ${annotation_b} \
+        ${matricesRaw} \
+        ${annotationT} \
+        ${annotationB} \
         ${samples.collect { sample -> "\"${sample.name}\"" }.join(',')} \
         "seurat_object.rds" \
-        "${get_sample_list_type_bits(samples)}" \
+        "${getSampleListTypeBits(samples)}" \
         "${annotation}" \
-        "${scGate_model}"
+        "${scGateModel}"
     """
 }
 
 process CAR_METRICS {
+    publishDir "${params.outdir}/car_metrics"
     label 'module_python3'
 
     input:
-    path sample_alignments_bam, stageAs: 'dir*/sample_alignments.bam', arity: '1..*'
-    path sample_alignments_bai, stageAs: 'dir*/sample_alignments.bam.bai', arity: '1..*'
-    path car_fa, stageAs: 'car.fa', arity: '1'
-    path car_gtf, stageAs: 'car.gtf', arity: '1'
+    path sampleAlignmentBams, stageAs: 'bams*/', arity: '1..*'
+    path sampleAlignmentBais, stageAs: 'bams*/', arity: '1..*'
+    path carFasta, stageAs: 'car.fa', arity: '1'
+    path carGtf, stageAs: 'car.gtf', arity: '1'
     val samples
-    path quant_dirs
-    
+
     output:
     path 'results_metrics_reads_CAR.csv', emit: metrics
     path 'results_coverage_against_CAR.csv', emit: coverage
-    path 'results_coverage_against_CAR_unique.csv', emit: coverage_unique
-    path "CAR_est_counts_matrix.csv", optional: true, emit: kallisto_matrix
+    path 'results_coverage_against_CAR_unique.csv', emit: uniqueCoverage
 
     script:
-    def kallisto_cmd = quant_dirs ? """
-    Kallisto_Comparisons.py \\
-        --input-dir ${quant_dirs.join(' ')} \\
-        --output CAR_est_counts_matrix.csv
-    """ : ""
-
     """
     CAR_quality.py \
         --sample_names ${samples.collect { sample -> sample.name }.join(' ')} \
-        --bam_files ${sample_alignments_bam.join(' ')} \
-        --CAR_fasta_file ${car_fa} \
-        --CAR_gtf_file ${car_gtf}
-
-    ${kallisto_cmd}
+        --bam_files ${sampleAlignmentBams.join(' ')} \
+        --CAR_fasta_file ${carFasta} \
+        --CAR_gtf_file ${carGtf}
     """
 }
 
@@ -212,7 +206,7 @@ process QUARTO {
     label 'module_quarto'
 
     input:
-    path kallisto_matrix, arity: '1' 
+    path kallisto_matrix, arity: '1'
     path car_plot_qmd, arity: '1'
     path car_quality_plot_py, arity: '1'
     path helper_functions, arity: '1'
@@ -221,7 +215,7 @@ process QUARTO {
     path metrics_reads_car, arity: '1'
     path metrics_coverage_car, arity: '1'
     path metrics_coverage_car_unique, arity: '1'
-    val  samples
+    val samples
 
     output:
     path 'metrics_html'
@@ -230,13 +224,13 @@ process QUARTO {
     """
     export HOME=\$(realpath "quarto-cache")
     quarto render ${car_plot_qmd} \
-        -P kallisto_matrix:${kallisto_matrix} \
+        -P kallisto_matrix:${isNullFile(kallisto_matrix) ? "" : kallisto_matrix} \
         -P seurat_object:"${seurat_object}" \
         -P gtf:"${annotation}" \
         -P results_metrics_reads_CAR:"${metrics_reads_car}" \
         -P results_coverage_against_CAR:"${metrics_coverage_car}" \
         -P results_coverage_against_CAR_unique:"${metrics_coverage_car_unique}" \
-        -P libraries:"${get_sample_list_type_bits(samples)}" \
+        -P libraries:"${getSampleListTypeBits(samples)}" \
         --no-cache
 
     mkdir metrics_html
@@ -245,9 +239,9 @@ process QUARTO {
     """
 }
 
-
 process KALLISTO_INDEX {
     label 'module_kallisto'
+
     input:
     path fasta
 
@@ -255,114 +249,143 @@ process KALLISTO_INDEX {
     path "*.idx"
 
     script:
-    def fasta_basename = fasta.getBaseName()  // strips .fa/.fasta
     """
-    kallisto index -i ${fasta_basename}.idx ${fasta}
+    kallisto index -i \$(basename ${fasta}).idx ${fasta}
     """
 }
 
 process KALLISTO_QUANT {
     label 'module_kallisto'
     fair true
+    tag "${sampleName}"
 
     input:
     path index_file
-    path libraries, stageAs: 'library', arity: '1..*'
-    val sample_name
+    tuple path(gexLibrary, stageAs: 'library/*'), val(sampleName)
 
     output:
-    path "quant_${sample_name}"
+    path "quant_${sampleName}"
 
     script:
     """
-    echo "Running kallisto for ${sample_name}"
-
-    READS=\$(for lib in library*; do find -L "\$lib" -type f -name '*_R_*R2_*.fastq.gz' | head -n 1; done | sort | tr '\\n' ' ')
-
+    echo "Running kallisto for ${sampleName}"
+    READS=\$(find -L "${gexLibrary}" -type f -name '*R2_*.fastq.gz')
     echo "Using reads: \$READS"
 
     kallisto quant \\
         -i ${index_file} \\
-        -o quant_${sample_name} \\
+        -o quant_${sampleName} \\
         --single -l 350 -s 50 \\
         --single-overhang \\
         \$READS
     """
 }
 
-workflow RUN_SECONDARY_ANALYSIS {
+process KALLISTO_COMPARISONS {
+    label 'module_python3'
+
+    input:
+    path quantDirs, stageAs: 'quant_dirs/*'
+
+    output:
+    path "CAR_est_counts_matrix.csv"
+
+    script:
+    """
+    Kallisto_Comparisons.py \
+        --input-dir ${quantDirs.join(' ')} \
+        --output CAR_est_counts_matrix.csv
+    """
+}
+
+workflow SECONDARY_ANALYSIS {
     take:
-    // sample list
     samples
-
-    // paths
-    gex_reference
-    vdj_reference
-    feat_reference
-
-    //CAR references
-    car_fa
-    car_gtf
-    multiple_car_fa // for kallisto indexing & quantification
-    scGate_model
+    gexReference
+    vdjReference
+    featureReference
+    carFasta
+    carGtf
+    multiCarFasta
+    scGateModel
+    cellrangerClusterTemplate
 
     main:
-    CELLRANGER_MULTI (
-        params.cellranger_cluster_template ?: [],
-        samples.map { sample -> sample.libraries.collect { library -> library.path } },
-        gex_reference.value ?: [],
-        vdj_reference.value ?: [],
-        feat_reference.value ?: [],
-        samples
-    )
-
-    do_sub_workflow = (car_fa.value && car_gtf.value)
-    if (multiple_car_fa.value) {
-        KALLISTO_INDEX(multiple_car_fa)
-        KALLISTO_QUANT(
-            KALLISTO_INDEX.out, 
-            samples.map { sample -> sample.libraries.collect { library -> library.path } },
-            samples.map { sample -> sample.name })
+    sample_libs = samples.map { sample ->
+        tuple(
+            sample.libraries.collect { library -> library.path },
+            sample.libraries,
+            sample.name,
+        )
     }
 
-    if (do_sub_workflow) {
-        SEURAT_OBJECT (
+    CELLRANGER_MULTI(
+        cellrangerClusterTemplate,
+        gexReference,
+        vdjReference,
+        featureReference,
+        sample_libs,
+    )
+
+    doKallistoWorkflow = !isNullFile(multiCarFasta)
+    if (doKallistoWorkflow) {
+        kallistoInput = samples.map { sample ->
+            tuple(
+                sample.libraries.find { library -> library.type == 'Gene Expression' }.path,
+                sample.name,
+            )
+        }
+
+        KALLISTO_INDEX(multiCarFasta)
+
+        KALLISTO_QUANT(
+            KALLISTO_INDEX.out,
+            kallistoInput,
+        )
+
+        KALLISTO_COMPARISONS(
+            KALLISTO_QUANT.out.collect()
+        )
+    }
+
+    doCarWorkflow = !isNullFile(carFasta) && !isNullFile(carGtf)
+    if (doCarWorkflow) {
+        SEURAT_OBJECT(
             projectDir.resolve('bin/helper_functions.R'),
-            CELLRANGER_MULTI.out.feature_bc_matrix.collect(),
-            CELLRANGER_MULTI.out.feature_raw_bc_matrix.collect(),
-            CELLRANGER_MULTI.out.vdj_t_annotations.collect(),
-            CELLRANGER_MULTI.out.vdj_b_annotations.collect(),
-            car_gtf,
+            CELLRANGER_MULTI.out.featureBcMatrix.collect(),
+            CELLRANGER_MULTI.out.rawFeatureBcMatrix.collect(),
+            CELLRANGER_MULTI.out.vdjTAnnotations.collect(),
+            CELLRANGER_MULTI.out.vdjBAnnotations.collect(),
+            carGtf,
             samples.collect(),
-            scGate_model
+            scGateModel,
         )
 
-        CAR_METRICS (
-            CELLRANGER_MULTI.out.sample_alignments_bam.collect(),
-            CELLRANGER_MULTI.out.sample_alignments_bai.collect(),
-            car_fa,
-            car_gtf,
+        CAR_METRICS(
+            CELLRANGER_MULTI.out.sampleAlignmentsBam.collect(),
+            CELLRANGER_MULTI.out.sampleAlignmentsBai.collect(),
+            carFasta,
+            carGtf,
             samples.collect(),
-            multiple_car_fa.value ? KALLISTO_QUANT.out.collect() : []
         )
 
-        QUARTO (
-            CAR_METRICS.out.kallisto_matrix,
+        QUARTO(
+            doKallistoWorkflow ? KALLISTO_COMPARISONS.out : getNullFile(),
             projectDir.resolve('bin/CAR_plot.qmd'),
             projectDir.resolve('bin/CAR_quality_plot.py'),
             projectDir.resolve('bin/helper_functions.R'),
             SEURAT_OBJECT.out,
-            car_gtf,
+            carGtf,
             CAR_METRICS.out.metrics,
             CAR_METRICS.out.coverage,
-            CAR_METRICS.out.coverage_unique,
-            samples.collect()
+            CAR_METRICS.out.uniqueCoverage,
+            samples.collect(),
         )
     }
 
     emit:
-    cellranger_web_summary = CELLRANGER_MULTI.out.web_summary
+    cellranger_web_summary = CELLRANGER_MULTI.out.webSummary
     cellranger_full = CELLRANGER_MULTI.out.full
-    seurat_obj = do_sub_workflow ? SEURAT_OBJECT.out : []
-    quarto_out = do_sub_workflow ? QUARTO.out : []
+    seurat_obj = doCarWorkflow ? SEURAT_OBJECT.out : getNullFile()
+    quarto_out = doCarWorkflow ? QUARTO.out : getNullFile()
 }

@@ -1,3 +1,16 @@
+#!/bin/bash
+set -e
+
+# script copied and modified from https://www.10xgenomics.com/support/software/cell-ranger/downloads/cr-ref-build-steps#human-ref-2024-a
+
+# input:
+#   $1: src_fa
+#   $2: src_gtf
+#   $3: car_fa
+#   $4: car_gtf
+#   $5: task.cpus
+#   $6: task.memory.toGiga()
+
 # Genome metadata
 genome="GRCh38"
 version="2024-A"
@@ -9,10 +22,10 @@ mkdir -p "$build"
 # Download source files if they do not exist in reference_sources/ folder
 source="reference_sources"
 mkdir -p "$source"
-mv "!{src_fa}" $source
-mv "!{src_gtf}" $source
-fasta_in="${source}/!{src_fa}"
-gtf_in="${source}/!{src_gtf}"
+mv "$1" $source
+mv "$2" $source
+fasta_in="${source}/$(basename $1)"
+gtf_in="${source}/$(basename $2)"
 
 # Modify sequence headers in the Ensembl FASTA to match the file
 # "GRCh38.primary_assembly.genome.fa" from GENCODE. Unplaced and unlocalized
@@ -56,8 +69,7 @@ cat "$gtf_in" \
 # NOTES:
 # Since Ensembl 110, polymorphic pseudogenes are now just protein_coding.
 # Readthrough genes are annotated with the readthrough_transcript tag.
-BIOTYPE_PATTERN=\
-"(protein_coding|protein_coding_LoF|lncRNA|\
+BIOTYPE_PATTERN="(protein_coding|protein_coding_LoF|lncRNA|\
 IG_C_gene|IG_D_gene|IG_J_gene|IG_LV_gene|IG_V_gene|\
 IG_V_pseudogene|IG_J_pseudogene|IG_C_pseudogene|\
 TR_C_gene|TR_D_gene|TR_J_gene|TR_V_gene|\
@@ -106,26 +118,29 @@ grep -Ff "${build}/gene_allowlist" "$gtf_modified" \
 # Concatenate CAR files
 fasta_final="$fasta_modified"
 gtf_final="$gtf_filtered"
-if [ -f "!{car_fa}" ] && [ -f "!{car_gtf}" ]; then
+if [[ ${3:-} != 0 && -f $3 ]] && [[ ${4:-} != 0 && -f $4 ]]; then
   gtf_car="${build}/$(basename "$gtf_final")_car.gtf"
-  cat "$gtf_final" "!{car_gtf}" > "$gtf_car"
+  cat "$gtf_final" "$4" > "$gtf_car"
   gtf_final="$gtf_car"
 
   fasta_car="${build}/$(basename "$fasta_final")_car.fa"
-  cat "$fasta_final" "!{car_fa}" > "$fasta_car"
+  cat "$fasta_final" "$3" > "$fasta_car"
   fasta_final="$fasta_car"
 else
-  [[ ! -f "!{car_fa}" ]] && echo "Missing: !{car_fa}"
-  [[ ! -f "!{car_gtf}" ]] && echo "Missing: !{car_gtf}"
+  [[ ${3:-} != 0 && ! -f $3 ]] && echo "Missing car_fa: $3"
+  [[ ${4:-} != 0 && ! -f $4 ]] && echo "Missing car_gtf: $4"
   echo "Missing at least one car file. Not concatenating."
 fi
 
 # Create reference package
+args=()
+[[ ${5:-0} -gt 0 ]] && args+=("--nthreads=$5")
+[[ ${6:-0} -gt 0 ]] && args+=("--memgb=$6")
+
 cellranger mkref \
   --ref-version="$version" \
   --genome="$genome" \
   --fasta="$fasta_final" \
   --genes="$gtf_final" \
   --output-dir="gex_reference" \
-  !{task.cpus ? '--nthreads=' + task.cpus : ''} \
-  !{task.memory ? '--memgb=' + task.memory.toGiga() : ''}
+  ${args[@]}

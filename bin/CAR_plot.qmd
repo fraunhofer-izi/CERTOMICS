@@ -267,7 +267,7 @@ if flags["GEX"]:
 #| fig-height: 4
 
 if flags["GEX"]:
-  CAR_quality_plot.plot_read_metrices(read_metrics)
+  sample_names = CAR_quality_plot.plot_read_metrices(read_metrics)
 ```
 
 ## Count-level
@@ -296,6 +296,7 @@ theme_custom <- function(base_size = 10, base_family = "") {
 
 car_construct_path = params$gtf
 lines <- readLines(car_construct_path)
+sample_order <- py$sample_names
 
 # Extract the first line
 first_line <- lines[1]
@@ -311,7 +312,14 @@ if (flags$GEX && params$gtf != "none" && !is.null(meta_data)){
   total_t_cells <- t_cell_data %>%
     group_by(orig.ident) %>%
     summarise(total_T = n(), .groups = "drop")
+  
+  all_samples <- total_t_cells$orig.ident
+  all_types <- c("CD4", "CD8", "gdT", "Multi")
 
+  car_t_cells_complete <- expand_grid(
+    orig.ident = all_samples,
+    T_cell_type = all_types
+  )
   # Step 3: CAR+ CD4 and CD8 counts per sample
   car_t_cells <- t_cell_data %>%
     filter(T_CAR == TRUE) %>%
@@ -325,20 +333,28 @@ if (flags$GEX && params$gtf != "none" && !is.null(meta_data)){
     group_by(orig.ident, T_cell_type) %>%
     summarise(CAR_count = n(), .groups = "drop")
 
-  # Step 4: Merge and calculate % of all T cells
-  car_percent <- car_t_cells %>%
-    left_join(total_t_cells, by = "orig.ident") %>%
-    mutate(percentage = (CAR_count / total_T) * 100)
+  car_t_cells_complete <- car_t_cells_complete %>%
+    left_join(
+      car_t_cells,
+      by = c("orig.ident", "T_cell_type")
+    ) %>%
+    mutate(CAR_count = replace_na(CAR_count, 0))
 
+  car_percent <- car_t_cells_complete %>%
+    left_join(total_t_cells, by = "orig.ident") %>%
+    mutate(
+      percentage = ifelse(total_T > 0, (CAR_count / total_T) * 100, 0),
+      orig.ident = factor(orig.ident, levels = sample_order)  
+    )
   car_percent <- car_percent %>%
     mutate(
       text_color = case_when(
         T_cell_type %in% c("CD4", "gdT", "Multi") ~ "black",
         TRUE ~ "white"
-      )
+      ),
+      show_label = ifelse(percentage <= 1, NA, CAR_count)
     )
-  car_percent <- car_percent %>%
-  mutate(show_label = ifelse(percentage <= 1, NA, CAR_count))
+
   # Step 5: Create stacked barplot
   plot_car_proportion <- ggplot(car_percent, aes(x = orig.ident, y = percentage, fill = T_cell_type)) +
     geom_bar(stat = "identity") +
@@ -394,7 +410,8 @@ if (flags$GEX && params$gtf != "none" && !is.null(meta_data)){
       car_pos_nk = sum(CAR_BY_EXPRS == TRUE),
       car_pos_fraction = car_pos_nk / total_nk,
       car_pos_percent = 100 * car_pos_fraction
-    )
+    ) %>% 
+    mutate(orig.ident = factor(orig.ident, levels = sample_order)) 
 
   # Step 5: Create stacked barplot
   plot_nk_car_percent <- ggplot(nk_summary, aes(x = orig.ident, y = car_pos_percent)) +
@@ -441,7 +458,8 @@ if (flags$GEX && params$gtf != "none" && !is.null(meta_data)){
       car_pos_m = sum(CAR_BY_EXPRS == TRUE),
       car_pos_fraction = car_pos_m / total_m,
       car_pos_percent = 100 * car_pos_fraction
-    )
+    )%>%
+    mutate(orig.ident = factor(orig.ident, levels = sample_order))  
 
   # Step 5: Create stacked barplot
   plot_m_car_percent <- ggplot(m_summary, aes(x = orig.ident, y = car_pos_percent)) +
@@ -488,7 +506,8 @@ if (flags$GEX && params$gtf != "none" && !is.null(meta_data)){
       car_pos_m = sum(CAR_BY_EXPRS == TRUE),
       car_pos_fraction = car_pos_m / total_m,
       car_pos_percent = 100 * car_pos_fraction
-    )
+    )%>%
+  mutate(orig.ident = factor(orig.ident, levels = sample_order))
 
   # Step 5: Create stacked barplot
   plot_m_car_percent <- ggplot(m_summary, aes(x = orig.ident, y = car_pos_percent)) +
@@ -536,7 +555,8 @@ if (flags$GEX && params$gtf != "none" && !is.null(meta_data)){
       car_pos_m = sum(CAR_BY_EXPRS == TRUE),
       car_pos_fraction = car_pos_m / total_m,
       car_pos_percent = 100 * car_pos_fraction
-    )
+    )%>%
+  mutate(orig.ident = factor(orig.ident, levels = sample_order))
 
   # Step 5: Create stacked barplot
   plot_m_car_percent <- ggplot(m_summary, aes(x = orig.ident, y = car_pos_percent)) +
@@ -620,7 +640,8 @@ if (flags$GEX){
   # Get number of each cloneSize
   result <- meta_data %>%
     group_by(orig.ident, scGate_multi) %>%
-    summarize(cell_count = n(), .groups = "drop")  # Count absolute numbers
+    summarize(cell_count = n(), .groups = "drop") %>%
+  mutate(orig.ident = factor(orig.ident, levels = sample_order))  
 
   # Create the stacked bar plot with absolute counts
   stacked_bar_absolute_plot <- ggplot(result, aes(x = orig.ident, y = cell_count, fill = scGate_multi)) +
@@ -655,7 +676,8 @@ if (flags$GEX) {
     ungroup() %>%
     group_by(orig.ident) %>%
     mutate(total_cells = sum(cell_count),
-          proportion = (cell_count / total_cells) * 100)  # Calculate proportion
+          proportion = (cell_count / total_cells) * 100)  %>%
+  mutate(orig.ident = factor(orig.ident, levels = sample_order)) 
 
   # Create the stacked bar plot
   stacked_bar_plot <- ggplot(result, aes(x = orig.ident, y = proportion, fill = scGate_multi)) +
@@ -709,7 +731,8 @@ if (is.null(meta_data)) {
 if (flags$VDJT){
   # Create a copy of meta_data and remove rows where cloneSize is NA
   meta_data_filtered <- meta_data %>%
-    filter(VDJ_T_AVAIL == TRUE & !is.na(cloneSize))
+    filter(VDJ_T_AVAIL == TRUE & !is.na(cloneSize))%>%
+  mutate(orig.ident = factor(orig.ident, levels = sample_order))  
   # Berechne den minimalen und maximalen clonalFrequency-Wert für jede Clone-Size-Kategorie
   clone_size_ranges <- meta_data_filtered %>%
         group_by(cloneSize) %>%
@@ -748,7 +771,8 @@ if (flags$VDJT){
 
   clone_size_counts <- meta_data_filtered %>%
     group_by(orig.ident, cloneSize) %>%
-    summarise(count = n_distinct(CTstrict), .groups = 'drop')  # Count unique clonotypes
+    summarise(count = n_distinct(CTstrict), .groups = 'drop')%>%
+  mutate(orig.ident = factor(orig.ident, levels = sample_order))
 
   # Plot absolute number of clonotypes
   plot_clone_size_absolute <- ggplot(clone_size_counts, aes(x = orig.ident, y = count, fill = cloneSize)) +
@@ -785,7 +809,8 @@ if (flags$VDJT){
   # Calculate percentages within each sample
   clone_size_percent <- clone_size_counts %>%
     group_by(orig.ident) %>%
-    mutate(percentage = (count / sum(count)) * 100)
+    mutate(percentage = (count / sum(count)) * 100) %>%
+  mutate(orig.ident = factor(orig.ident, levels = sample_order)) 
 
   plot_clone_size_percentage <- ggplot(clone_size_percent, aes(x = orig.ident, y = percentage, fill = cloneSize)) +
     geom_bar(stat = "identity") +  # Stacked bars with proportion scaling
@@ -818,7 +843,9 @@ if (flags$VDJT){
 
 if (flags$VDJB){
   meta_data_filtered <- meta_data %>%
-      filter(VDJ_B_AVAIL == TRUE & !is.na(cloneSize))
+      filter(VDJ_B_AVAIL == TRUE & !is.na(cloneSize))%>%
+    mutate(orig.ident = factor(orig.ident, levels = sample_order))  
+
 
   # Berechne den minimalen und maximalen clonalFrequency-Wert für jede Clone-Size-Kategorie
   clone_size_ranges <- meta_data_filtered %>%
@@ -827,7 +854,6 @@ if (flags$VDJB){
           min_clonalFrequency = min(clonalFrequency, na.rm = TRUE),
           max_clonalFrequency = max(clonalFrequency, na.rm = TRUE)
         )
-
   clone_size_ranges %>%
     kable(caption = "Clonal Frequency Ranges by Clone-Size Category")
 }
@@ -851,7 +877,8 @@ if (flags$VDJB){
   # Get number of each cloneSize
   clone_size_counts <- meta_data_filtered %>%
     group_by(orig.ident, cloneSize) %>%
-    summarise(count = n_distinct(CTstrict), .groups = 'drop')  # Count unique clonotypes
+    summarise(count = n_distinct(CTstrict), .groups = 'drop') %>%
+  mutate(orig.ident = factor(orig.ident, levels = sample_order))
 
   # Plot absolute number of clonotypes
   plot_clone_size_absolute <- ggplot(clone_size_counts, aes(x = orig.ident, y = count, fill = cloneSize)) +
@@ -889,7 +916,8 @@ if (flags$VDJB){
   # Calculate percentages within each sample
   clone_size_percent <- clone_size_counts %>%
     group_by(orig.ident) %>%
-    mutate(percentage = (count / sum(count)) * 100)
+    mutate(percentage = (count / sum(count)) * 100)%>%
+  mutate(orig.ident = factor(orig.ident, levels = sample_order)) 
 
   plot_clone_size_percentage <- ggplot(clone_size_percent, aes(x = orig.ident, y = percentage, fill = cloneSize)) +
     geom_bar(stat = "identity") +  # Stacked bars with proportion scaling
