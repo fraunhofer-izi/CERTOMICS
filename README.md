@@ -4,10 +4,8 @@ CERTOMICS is a Nextflow-based pipeline offering enhanced **CERT**ainty in immuno
 
 For further information and **installation guidelines** go to our [Website](https://fraunhofer-izi.github.io/Living-Drugs-Wiki/Home/Pipelines/CERTOMICS-Pipeline/)
 
-<img alt="Abb_CAR_T_cell_profiling_V2"
-     src="https://github.com/user-attachments/assets/b49a424e-befc-47e0-a568-9c2523691c0c"
-     width="50%" />
-
+    
+<img width="1101" height="1081" alt="Abb_CAR_T_cell_profiling_V2" src="https://github.com/user-attachments/assets/a40482de-e460-4196-9b71-925f7696000c" />
 
 # Contacts
 
