@@ -489,14 +489,26 @@ annotation_exr_and_scgate <- function(se.meta, car_construct, scGate_model){
   log_message(paste("Using scGate model:", scGate_model))
   se.meta_annotated <- scGate(se.meta, model = current_model, save.levels = FALSE, multi.asNA = FALSE)
   #annotate T cells with and without
-  if (!is.null(car_construct)){
-    se.meta_annotated$T_CAR <- ifelse(
-      (se.meta_annotated$is.pure_CD8T == "Pure" & se.meta_annotated$CAR_BY_EXPRS == "TRUE") |
-      (se.meta_annotated$is.pure_CD4T == "Pure" & se.meta_annotated$CAR_BY_EXPRS == "TRUE") |
-      (se.meta_annotated$CAR_BY_EXPRS == "TRUE" & se.meta_annotated$is.pure_gdT == "Pure"),
-      TRUE,  # Set T_CAR to TRUE if any of the conditions are met
-      FALSE  # Set T_CAR to FALSE otherwise
-    )
+  # Annotate T cells with and without CAR
+  if (!is.null(car_construct)) {
+  if (scGate_model == "TME_HiRes") {
+    # TME_HiRes: do NOT use is.pure_gdT
+      se.meta_annotated$T_CAR <- ifelse(
+        (se.meta_annotated$is.pure_CD8T == "Pure" & se.meta_annotated$CAR_BY_EXPRS == "TRUE") |
+        (se.meta_annotated$is.pure_CD4T == "Pure" & se.meta_annotated$CAR_BY_EXPRS == "TRUE"),
+        TRUE,
+        FALSE
+      )
+    } else {
+      # Other models (e.g. PBMC): keep original logic
+      se.meta_annotated$T_CAR <- ifelse(
+        (se.meta_annotated$is.pure_CD8T == "Pure" & se.meta_annotated$CAR_BY_EXPRS == "TRUE") |
+        (se.meta_annotated$is.pure_CD4T == "Pure" & se.meta_annotated$CAR_BY_EXPRS == "TRUE") |
+        (se.meta_annotated$CAR_BY_EXPRS == "TRUE" & se.meta_annotated$is.pure_gdT == "Pure"),
+        TRUE,
+        FALSE
+      )
+    }
   }
   se.meta <- se.meta_annotated
   log_message("DONE: annotation_exr_and_scgate")

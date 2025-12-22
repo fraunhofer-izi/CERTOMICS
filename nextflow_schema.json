@@ -118,7 +118,7 @@
         },
         "multiple_car_fa": {
           "type": "string",
-          "description": "The FASTA file containing several CAR isoforms to compare counts"
+          "description": "The FASTA file containing several CAR isoforms to check correct CAR identity"
         },
         "multiqc_config": {
           "type": "string",
