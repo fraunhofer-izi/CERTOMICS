@@ -15,7 +15,8 @@ execute:
   error: true
   debug: true
 params:
-  kallisto_matrix: "" #'CAR_est_counts_matrix.csv'
+  mapped_kmer_dir: "" #'folder to mapped CARkmer counts'
+  unmapped_kmer_dir: "" #'folder to mapped CARkmer counts'
   results_metrics_reads_CAR: "" #"results_metrics_reads_CAR.csv" 
   results_coverage_against_CAR: "" #"results_coverage_against_CAR.csv"
   results_coverage_against_CAR_unique: "" #"results_coverage_against_CAR_unique.csv"
@@ -114,6 +115,24 @@ colnames(cells_per_sample_after) <- c("Sample", "Cells_After_Filtering")
 cell_counts_summary <- merge(cells_per_sample_before, cells_per_sample_after, by = "Sample", all = TRUE)
 cell_counts_summary[is.na(cell_counts_summary)] <- 0
 
+has_mapped_kmers <- 
+  nzchar(params$mapped_kmer_dir) &&
+  dir.exists(params$mapped_kmer_dir) &&
+  length(list.files(
+    params$mapped_kmer_dir,
+    pattern = "\\.CAR_kmer_summary\\.txt$"
+  )) > 0
+
+has_unmapped_kmers <- 
+  nzchar(params$unmapped_kmer_dir) &&
+  dir.exists(params$unmapped_kmer_dir) &&
+  length(list.files(
+    params$unmapped_kmer_dir,
+    pattern = "\\.unmapped_kmc_intersect_summary\\.txt$"
+  )) > 0
+
+has_any_kmers <- has_mapped_kmers || has_unmapped_kmers
+
 ```
 
 ```{r}
@@ -187,52 +206,158 @@ flags = parse_binary_string(r.params['libraries'])
 ```
 
 
-```{python}
-#| label: plot-kallisto-metrics-across-car-constructs
-#| fig-cap: "Estimated read counts for different CAR constructs across samples, using kallisto."
+`r if (has_any_kmers)
+"### Validation of CAR Transgene Identity"`
+
+```{r, results="asis", echo=FALSE}
+if (has_any_kmers) {
+  cat("
+::: {.callout-note collapse=\"true\"}
+## Interpretation of mapped and unmapped CAR-specific k-mer signals:
+
+To validate the identity of the CAR transgene expressed in patient-derived
+CAR T cells, we applied a k-mer–based approach using CAR-specific unique 31-mers.
+
+Two complementary analyses were performed:
+
+1. Detection of CAR-specific k-mers in reads mapped to the transgene
+   included in the custom reference genome.
+2. Detection of CAR-specific k-mers in reads that did not map to the
+   transgene reference.
+
+When the **correct** CAR construct is included in the reference, a strong signal is expected in reads mapped to the CAR locus. In addition, CAR-specific k-mers may also be detected in the unmapped read fraction. This is a common feature of scRNA-seq data and reflects alignment sensitivity rather than incorrect construct usage, as a subset of CAR-derived fragments can fail alignment due to low sequence complexity (e.g., polyA tails), sequencing errors, or stringent alignment and filtering criteria.
+
+Conversely, when an **incorrect** CAR construct is used for mapping, CAR-specific signal is largely absent from the mapped reads, while substantial CAR-specific k-mer signal may still be recovered from the unmapped fraction. In this case, unmapped k-mer enrichment indicates the presence of CAR-derived sequences that cannot be aligned to the provided reference, thereby serving as evidence for reference mismatch rather than true absence of CAR expression. Plase note that low-level CAR-specific k-mer counts may also be observed in samples lacking a CAR transgene. This arises because many CAR constructs incorporate endogenous protein-derived regions, such as signal peptides, transmembrane domains, or costimulatory and signaling domains (e.g., CD28, 4-1BB, CD3ζ), whose sequences may be partially shared with endogenous transcripts.
+:::
+")
+}
+```
+
+```{r}
+#| label: plot-car-kmer-analysis
+#| fig-cap: "CAR-specific unique k-mer detection across samples in mapped and unmapped reads."
 #| echo: false
-#| eval: !expr (params$kallisto_matrix != "" && file.exists(params$kallisto_matrix))
+#| eval: !expr (has_any_kmers)
 #| warning: false
 #| results: "hide"
 
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-count_df = pd.read_csv(r.params['kallisto_matrix'], index_col=0)
+mapped_files <- list.files(
+  params$mapped_kmer_dir,
+  pattern = "\\.CAR_kmer_summary\\.txt$",
+  full.names = TRUE
+)
+mapped_all <- do.call(
+  rbind,
+  lapply(mapped_files, function(f) {
 
-# --- Grouped Bar Plot ---
-samples = count_df.index.tolist()
-cars = count_df.columns.tolist()
-x = np.arange(len(samples))
-bar_width = 0.8 / len(cars)
+    df <- read.delim(
+      f,
+      sep = "\t",
+      strip.white = TRUE,
+      stringsAsFactors = FALSE
+    )
 
-fig, ax = plt.subplots(figsize=(14, 6))
+    sample_id <- sub(
+      "\\.CAR_kmer_summary\\.txt$",
+      "",
+      basename(f)
+    )
 
-for i, car in enumerate(cars):
-    ax.bar(x + i * bar_width, count_df[car], width=bar_width, label=car)
+    # Add / modify columns (base R equivalent of mutate)
+    df$Sample <- sample_id
+    df$Analysis <- "Mapped"
+    df$Kmer_hits <- df$Kmer_matches
 
-# Centered xticks for grouped bars
-ax.set_xticks(x + bar_width * (len(cars) - 1) / 2)
-ax.set_xticklabels(samples, rotation=45, fontsize=16)
+    # Select columns (base R equivalent of select)
+    df <- df[, c("Sample", "Tested_CAR", "Kmer_hits", "Analysis")]
 
-# Axis labels & title with larger font
-ax.set_xlabel("Sample", fontsize24)
-ax.set_ylabel("Estimated Read Counts", fontsize=16)
+    df
+  })
+)
 
-# Increase tick label sizes
-ax.tick_params(axis='y', labelsize=16)
+unmapped_files <- list.files(
+  params$unmapped_kmer_dir,
+  pattern = "\\.unmapped_kmc_intersect_summary\\.txt$",
+  full.names = TRUE
+)
+unmapped_all <- do.call(
+  rbind,
+  lapply(unmapped_files, function(f) {
 
-# Hide top and right spines only
-ax.spines['top'].set_visible(False)
-ax.spines['right'].set_visible(False)
+    df <- read.delim(
+      f,
+      sep = "\t",
+      strip.white = TRUE,
+      stringsAsFactors = FALSE
+    )
 
-# Legend with bigger font
-ax.legend(title="CAR", fontsize=16, title_fontsize=16, framealpha=0.7)
+    sample_id <- sub(
+      "\\.unmapped_kmc_intersect_summary\\.txt$",
+      "",
+      basename(f)
+    )
 
-plt.tight_layout()
-plt.show()
+    # Base R equivalent of mutate()
+    df$Sample <- sample_id
+    df$Analysis <- "Unmapped"
 
+    # Base R equivalent of select()
+    df <- df[, c("Sample", "Tested_CAR", "Kmer_hits", "Analysis")]
+
+    df
+  })
+)
+
+glimpse(mapped_all)
+glimpse(unmapped_all)
+car_kmer_all <- dplyr::bind_rows(
+  mapped_all,
+  unmapped_all
+)
+
+car_kmer_all <- car_kmer_all %>%
+  mutate(
+    Tested_CAR = str_replace(Tested_CAR, "_CAR_construct$", "")
+  )
+car_order <- car_kmer_all %>%
+  group_by(Tested_CAR) %>%
+  summarise(max_hits = max(Kmer_hits), .groups = "drop") %>%
+  arrange((max_hits)) %>%
+  pull(Tested_CAR)
+
+ggplot(
+  car_kmer_all,
+  aes(
+    x = factor(Tested_CAR, levels = car_order),
+    y = Kmer_hits,
+    fill = Sample
+  )
+) +
+  geom_col(position = "dodge", width = 0.7) +
+  coord_flip() +
+  facet_wrap(~ Analysis, scales = "free_y") +
+  scale_y_continuous(
+    limits = c(0, NA),
+    expand = expansion(mult = c(0, 0.05))
+  ) +
+  labs(
+    x = "CAR constructs",
+    y = "Number of k-mer hits",
+    fill = "Sample"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    panel.grid.major.y = element_blank(),
+    strip.text = element_text(face = "bold"),
+    axis.text.y = element_text(angle=45),
+    legend.position = "bottom",
+    legend.direction = "horizontal",
+    legend.box.just = "left",
+    axis.title.y = element_text(margin = margin(t = 20)),
+    axis.title.x = element_text(margin = margin(t = 10))
+  )
 ```
+
 
 ```{python}
 #| label: coverage-plot
@@ -304,9 +429,22 @@ first_line <- lines[1]
 car_construct <- strsplit(first_line, "\\s+")[[1]][1]
 
 if (flags$GEX && params$gtf != "none" && !is.null(meta_data)){
-  # Step 1: Filter for pure T cells
-  t_cell_data <- meta_data %>%
-    filter(is.pure_CD8T == "Pure" | is.pure_CD4T == "Pure" | is.pure_gdT == "Pure")
+  has_gdT <- "is.pure_gdT" %in% colnames(meta_data)
+
+  if (has_gdT) {
+    t_cell_data <- meta_data %>%
+      dplyr::filter(
+        is.pure_CD8T == "Pure" |
+        is.pure_CD4T == "Pure" |
+        is.pure_gdT  == "Pure"
+      )
+  } else {
+    t_cell_data <- meta_data %>%
+      dplyr::filter(
+        is.pure_CD8T == "Pure" |
+        is.pure_CD4T == "Pure"
+      )
+  }
 
   # Step 2: Total T cells per sample
   total_t_cells <- t_cell_data %>%

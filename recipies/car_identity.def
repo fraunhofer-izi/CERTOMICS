@@ -1,0 +1,22 @@
+Bootstrap: docker
+From: continuumio/miniconda3:latest
+
+%labels
+    Author Christina_Kuhn
+    Description "CAR identity tools: python, samtools, kmc"
+
+%environment
+    export LC_ALL=C
+    export PATH=/opt/conda/bin:$PATH
+
+%post
+    # Install packages
+    conda install -y -c conda-forge -c bioconda \
+        python=3 samtools
+	conda install bioconda::kmc
+
+    # Clean up
+    conda clean -a -y
+
+%runscript
+    exec "$@"

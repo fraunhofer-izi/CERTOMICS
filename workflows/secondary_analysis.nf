@@ -139,8 +139,8 @@ process SEURAT_OBJECT {
     path helperFunctionsScript, arity: '1'
     path featureBcMatrices, stageAs: 'feature_bc_matrix', arity: '1..*'
     path rawFeatureBcMatrices, stageAs: 'feature_raw_bc_matrix', arity: '1..*'
-    path vdjTAnnotations, stageAs: 'vdj_t_annotation', arity: '1..*'
-    path vdjBAnnotations, stageAs: 'vdj_b_annotation', arity: '1..*'
+    val  vdjTAnnotations
+    val  vdjBAnnotations
     path annotation, stageAs: 'annotation.gtf', arity: '1'
     val samples
     val scGateModel
@@ -206,7 +206,8 @@ process QUARTO {
     label 'module_quarto'
 
     input:
-    path kallisto_matrix, arity: '1'
+    path mapped_kmer_output, stageAs: 'mapped_kmer_outputs/*'
+    path unmapped_kmer_output, stageAs: 'unmapped_kmer_outputs/*'
     path car_plot_qmd, arity: '1'
     path car_quality_plot_py, arity: '1'
     path helper_functions, arity: '1'
@@ -224,7 +225,8 @@ process QUARTO {
     """
     export HOME=\$(realpath "quarto-cache")
     quarto render ${car_plot_qmd} \
-        -P kallisto_matrix:${isNullFile(kallisto_matrix) ? "" : kallisto_matrix} \
+        -P mapped_kmer_dir:"mapped_kmer_outputs" \
+        -P unmapped_kmer_dir:"unmapped_kmer_outputs" \
         -P seurat_object:"${seurat_object}" \
         -P gtf:"${annotation}" \
         -P results_metrics_reads_CAR:"${metrics_reads_car}" \
@@ -238,65 +240,77 @@ process QUARTO {
     mv CAR_plot_files metrics_html/
     """
 }
-
-process KALLISTO_INDEX {
-    label 'module_kallisto'
+process MAKE_UNIQUE_KMERS {
+    label 'module_car_identity'
 
     input:
-    path fasta
+    path carFasta, stageAs: 'car.fa'
+    path kmerScript
 
     output:
-    path "*.idx"
+    path "kmers_out"
 
     script:
     """
-    kallisto index -i \$(basename ${fasta}).idx ${fasta}
+    python $kmerScript car.fa 31 kmers_out
     """
 }
 
-process KALLISTO_QUANT {
-    label 'module_kallisto'
-    fair true
-    tag "${sampleName}"
+
+process CAR_IDENTITY_MAPPED {
+    label 'module_car_identity'
+    publishDir "${params.outdir}/car_identity/mapped", mode: 'copy'
 
     input:
-    path index_file
-    tuple path(gexLibrary, stageAs: 'library/*'), val(sampleName)
+    tuple path(bam), val(sample)
+    path kmers
+    val ref_tg
 
     output:
-    path "quant_${sampleName}"
+    path "${sample}.CAR_kmer_summary.txt"
 
     script:
     """
-    echo "Running kallisto for ${sampleName}"
-    READS=\$(find -L "${gexLibrary}" -type f -name '*R2_*.fastq.gz')
-    echo "Using reads: \$READS"
+    samtools index -c $bam || true
 
-    kallisto quant \\
-        -i ${index_file} \\
-        -o quant_${sampleName} \\
-        --single -l 350 -s 50 \\
-        --single-overhang \\
-        \$READS
+    bash compare_all_CARs_against_reference.sh "$bam" "$sample" "$ref_tg" "$kmers"
     """
 }
+process CAR_IDENTITY_UNMAPPED {
+    label 'module_car_identity'
+    publishDir "${params.outdir}/car_identity/unmapped", mode: 'copy'
 
-process KALLISTO_COMPARISONS {
-    label 'module_python3'
+    cpus 8
 
     input:
-    path quantDirs, stageAs: 'quant_dirs/*'
+    tuple path(bam), val(sample)
+    path kmers
 
     output:
-    path "CAR_est_counts_matrix.csv"
+    path "${sample}.unmapped_kmc_intersect_summary.txt"
 
     script:
     """
-    Kallisto_Comparisons.py \
-        --input-dir ${quantDirs.join(' ')} \
-        --output CAR_est_counts_matrix.csv
+    samtools index -c $bam || true
+
+    bash compare_all_CARs_against_unmapped.sh "$bam" "$sample" "$kmers" 31 "$task.cpus" 
     """
 }
+process EXTRACT_REFERENCE_TG {
+    label 'module_car_identity'
+
+    input:
+    path carFasta, stageAs: 'car.fa'
+
+    output:
+    stdout
+
+    script:
+    """
+    grep '^>' car.fa | head -n 1 | sed 's/^>//' | cut -d' ' -f1 | tr -d '\\n'
+    """
+}
+
 
 workflow SECONDARY_ANALYSIS {
     take:
@@ -327,35 +341,56 @@ workflow SECONDARY_ANALYSIS {
         sample_libs,
     )
 
-    doKallistoWorkflow = !isNullFile(multiCarFasta)
-    if (doKallistoWorkflow) {
-        kallistoInput = samples.map { sample ->
-            tuple(
-                sample.libraries.find { library -> library.type == 'Gene Expression' }.path,
-                sample.name,
-            )
-        }
-
-        KALLISTO_INDEX(multiCarFasta)
-
-        KALLISTO_QUANT(
-            KALLISTO_INDEX.out,
-            kallistoInput,
+    doKmerWorkflow = !isNullFile(multiCarFasta)
+    if (doKmerWorkflow) {
+        secondaryBamsCh = CELLRANGER_MULTI.out.sampleAlignmentsBam
+            .map { bam ->
+                tuple(
+                    bam,
+                    bam.parent.parent.name
+                )
+            }
+        // Stage CAR fasta
+        carFastaCh = Channel.fromPath(carFasta)
+        multiCarFastaCh = Channel.fromPath(multiCarFasta)
+        // Extract reference CAR once
+        ref_tg_ch = EXTRACT_REFERENCE_TG(carFastaCh)
+        // Generate unique kmers once
+        kmers_ch = MAKE_UNIQUE_KMERS(
+            multiCarFastaCh,
+            projectDir.resolve('bin/kmers_similarity.py')
         )
-
-        KALLISTO_COMPARISONS(
-            KALLISTO_QUANT.out.collect()
+        // Run per-sample CAR identity (mapped)
+        CAR_IDENTITY_MAPPED(
+            secondaryBamsCh,
+            kmers_ch,
+            ref_tg_ch
+        )
+        // Run per-sample CAR identity (unmapped)
+        CAR_IDENTITY_UNMAPPED(
+            secondaryBamsCh,
+            kmers_ch
         )
     }
 
     doCarWorkflow = !isNullFile(carFasta) && !isNullFile(carGtf)
     if (doCarWorkflow) {
+
+        vdjT_ch = CELLRANGER_MULTI.out.vdjTAnnotations
+            .map { it.toString() }
+            .ifEmpty { Channel.value('none') }
+
+        vdjB_ch = CELLRANGER_MULTI.out.vdjBAnnotations
+                    .map { it.toString() }
+                    .ifEmpty { Channel.value('none') }
+
+
         SEURAT_OBJECT(
             projectDir.resolve('bin/helper_functions.R'),
             CELLRANGER_MULTI.out.featureBcMatrix.collect(),
             CELLRANGER_MULTI.out.rawFeatureBcMatrix.collect(),
-            CELLRANGER_MULTI.out.vdjTAnnotations.collect(),
-            CELLRANGER_MULTI.out.vdjBAnnotations.collect(),
+            vdjT_ch.collect(),
+            vdjB_ch.collect(),
             carGtf,
             samples.collect(),
             scGateModel,
@@ -370,7 +405,8 @@ workflow SECONDARY_ANALYSIS {
         )
 
         QUARTO(
-            doKallistoWorkflow ? KALLISTO_COMPARISONS.out : getNullFile(),
+            doKmerWorkflow ? CAR_IDENTITY_MAPPED.out.collect() : getNullFile(),
+            doKmerWorkflow ? CAR_IDENTITY_UNMAPPED.out.collect() : getNullFile(),
             projectDir.resolve('bin/CAR_plot.qmd'),
             projectDir.resolve('bin/CAR_quality_plot.py'),
             projectDir.resolve('bin/helper_functions.R'),
