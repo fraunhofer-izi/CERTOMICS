@@ -362,7 +362,7 @@ def bar_plot(read_metrics, samples):
 
     # Save the plot
     plt.tight_layout()
-    # plt.savefig(f"Read_metrics_{car}.png", bbox_inches='tight')
+    # plt.savefig(f"Read_metrics.png", bbox_inches='tight')
 
 def main():
     """
