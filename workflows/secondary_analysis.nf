@@ -262,9 +262,7 @@ process CAR_IDENTITY_MAPPED {
     publishDir "${params.outdir}/car_identity/mapped", mode: 'copy'
 
     input:
-    tuple path(bam), val(sample)
-    path kmers
-    val ref_tg
+    tuple path(bam), val(sample), path(kmers), val(ref_tg)
 
     output:
     path "${sample}.CAR_kmer_summary.txt"
@@ -283,8 +281,7 @@ process CAR_IDENTITY_UNMAPPED {
     cpus 8
 
     input:
-    tuple path(bam), val(sample)
-    path kmers
+    tuple path(bam), val(sample), path(kmers)
 
     output:
     path "${sample}.unmapped_kmc_intersect_summary.txt"
@@ -360,18 +357,18 @@ workflow SECONDARY_ANALYSIS {
             multiCarFastaCh,
             projectDir.resolve('bin/kmers_similarity.py')
         )
+        car_identity_input_ch = secondaryBamsCh
+            .combine(kmers_ch)
+            .combine(ref_tg_ch)
+        
         // Run per-sample CAR identity (mapped)
-        CAR_IDENTITY_MAPPED(
-            secondaryBamsCh,
-            kmers_ch,
-            ref_tg_ch
-        )
+        CAR_IDENTITY_MAPPED(car_identity_input_ch)
         // Run per-sample CAR identity (unmapped)
-        CAR_IDENTITY_UNMAPPED(
-            secondaryBamsCh,
-            kmers_ch
-        )
-    }
+        car_identity_unmapped_input_ch = secondaryBamsCh
+            .combine(kmers_ch)
+
+        CAR_IDENTITY_UNMAPPED(car_identity_unmapped_input_ch)
+        }
 
     doCarWorkflow = !isNullFile(carFasta) && !isNullFile(carGtf)
     if (doCarWorkflow) {
